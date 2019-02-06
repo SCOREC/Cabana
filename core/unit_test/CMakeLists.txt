@@ -20,6 +20,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 ##--------------------------------------------------------------------------##
 ## General tests.
 ##--------------------------------------------------------------------------##
+
 foreach(_test Version Index CartesianGrid SoA)
   add_executable(${_test}_test tst${_test}.cpp unit_test_main.cpp)
   target_link_libraries(${_test}_test cabanacore cabana_core_gtest)
@@ -31,7 +32,7 @@ endforeach()
 ##--------------------------------------------------------------------------##
 foreach(_device ${CABANA_SUPPORTED_DEVICES})
   if(Cabana_ENABLE_${_device})
-    foreach(_test AoSoA Slice DeepCopy Tuple Sort LinkedCellList NeighborList Parallel)
+    foreach(_test ACDC AoSoA Slice DeepCopy Tuple Sort LinkedCellList NeighborList Parallel)
       add_executable(${_test}_test_${_device} ${_device}/tst${_test}_${_device}.cpp unit_test_main.cpp)
       target_link_libraries(${_test}_test_${_device} cabanacore cabana_core_gtest)
       if(_device STREQUAL Pthread OR _device STREQUAL OpenMP)
