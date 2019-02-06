@@ -22,6 +22,7 @@ set(gtest_args --gtest_color=yes)
 ##--------------------------------------------------------------------------##
 ## General tests.
 ##--------------------------------------------------------------------------##
+
 foreach(_test Version Index CartesianGrid SoA)
   add_executable(${_test}_test tst${_test}.cpp unit_test_main.cpp)
   target_link_libraries(${_test}_test cabanacore cabana_core_gtest)
@@ -87,7 +88,7 @@ macro(Cabana_add_tests)
   endforeach()
 endmacro()
 
-Cabana_add_tests(NAMES AoSoA Slice DeepCopy Tuple Sort LinkedCellList NeighborList Parallel)
+Cabana_add_tests(NAMES ACDC AoSoA Slice DeepCopy Tuple Sort LinkedCellList NeighborList Parallel)
 if(Cabana_ENABLE_MPI)
   Cabana_add_tests(MPI NAMES CommunicationPlan Distributor Halo)
 endif()
