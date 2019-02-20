@@ -10,7 +10,7 @@
  ****************************************************************************/
 
 #include <Cabana_Types.hpp>
-#include <Cabana_AoSoA.hpp>
+#include <Cabana_ACDC.hpp>
 #include <impl/Cabana_Index.hpp>
 
 #include <Kokkos_Core.hpp>
@@ -20,10 +20,27 @@
 namespace Test
 {
 //---------------------------------------------------------------------------//
-// Test an AoSoA.
+// Test an ACDC
 void testACDC()
 {
-  EXPECT_EQ( 1, 1 );
+
+  // Data dimensions.
+  const int dim_1 = 3;
+  const int dim_2 = 2;
+  const int dim_3 = 4;
+
+  // Declare data types.
+  using DataTypes =
+      Cabana::MemberTypes<float[dim_1][dim_2][dim_3],
+                              int,
+                              double[dim_1],
+                              double[dim_1][dim_2]
+                              >;
+  using ACDC_t = Cabana::ACDC<DataTypes,TEST_MEMSPACE>;
+  ACDC_t acdc;
+  // Check sizes.
+  EXPECT_EQ( acdc._offsets, nullptr );
+  EXPECT_EQ( acdc._aosoa, nullptr );
 }
 
 //---------------------------------------------------------------------------//
