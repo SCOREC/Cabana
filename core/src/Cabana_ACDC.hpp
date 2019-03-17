@@ -3,12 +3,12 @@
 #define CABANA_ACDC_HPP
 
 #include <Cabana_MemberTypes.hpp>
-#include <Cabana_Slice.hpp>
-#include <Cabana_Tuple.hpp>
+//#include <Cabana_Slice.hpp>
+//#include <Cabana_Tuple.hpp>
 #include <Cabana_Types.hpp>
 #include <Cabana_AoSoA.hpp>
-#include <Cabana_SoA.hpp>
-#include <impl/Cabana_Index.hpp>
+//#include <Cabana_SoA.hpp>
+//#include <impl/Cabana_Index.hpp>
 #include <impl/Cabana_PerformanceTraits.hpp>
 
 #include <Kokkos_Core.hpp>
@@ -39,7 +39,7 @@ class ACDC
       //int vector_len = _aosoa->vector_length;
       _vector_length = Impl::PerformanceTraits<
              typename MemorySpace::execution_space>::vector_length;
-      _offsets = new int[elem_count+1] ();
+      _offsets = new int[elem_count+1]();
       // elem at i owns SoA offsets[i+1] - offsets[i]
       for ( int i=0; i<elem_count; ++i ) {
         int SoA_count = (deg[i]/_vector_length) + 1;
