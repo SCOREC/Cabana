@@ -3,12 +3,8 @@
 #define CABANA_ACDC_HPP
 
 #include <Cabana_MemberTypes.hpp>
-//#include <Cabana_Slice.hpp>
-//#include <Cabana_Tuple.hpp>
 #include <Cabana_Types.hpp>
 #include <Cabana_AoSoA.hpp>
-//#include <Cabana_SoA.hpp>
-//#include <impl/Cabana_Index.hpp>
 #include <impl/Cabana_PerformanceTraits.hpp>
 
 #include <Kokkos_Core.hpp>
@@ -49,10 +45,21 @@ class ACDC
       _aosoa->resize( _size );
     }
 
+    KOKKOS_FUNCTION
+    std::size_t size() const { return _size; }
+
+    KOKKOS_FUNCTION
+    std::size_t vector_length() const { return _vector_length; }
+
+    KOKKOS_FUNCTION
+    int* offsets() const { return _offsets; }
+
+    
+
   //private:
-  public: // FIXME: make private again
-    int _size; // size of offset array
-    int _vector_length;
+  public: // TODO: make private again
+    std::size_t _size; // size of offset array
+    std::size_t _vector_length;
     int *_offsets; // offset array for soa
     AoSoA_t *_aosoa; // pointer to AoSoA
 
