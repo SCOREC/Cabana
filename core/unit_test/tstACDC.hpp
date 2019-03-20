@@ -30,9 +30,9 @@ void testACDC()
   const int dim_3 = 4;
 
   // deg array
-  const int deg[2] = {4, 1025};
-  const int total_particles = deg[0] + deg[1];
-  const int deg_len = 2;
+  const int deg[3] = {4, 1025, 0};
+  const int total_particles = deg[0] + deg[1] + deg[2];
+  const int deg_len = 3;
 
   // Declare data types.
   using DataTypes =
@@ -43,9 +43,9 @@ void testACDC()
                               >;
   using ACDC_t = Cabana::ACDC<DataTypes,TEST_MEMSPACE>;
   ACDC_t acdc( deg, deg_len );
-  // could be replaced with slicing?
+  // TODO: maybe replaced with slicing?
   int vector_len = acdc._vector_length;
-  // Check sizes.
+  // Sanity check of sizes.
   // FIXME total/vec_len isn't quite right needs to be each index of deg divided
   // by vector len and added but with one small then one large entry it works
   EXPECT_EQ( acdc._size, total_particles/vector_len + deg_len );
@@ -55,8 +55,9 @@ void testACDC()
   printf("AoSoA numSoA: %d\n", acdc._aosoa->numSoA());
   int offset1 = (deg[0]/vector_len) + 1;
   int offset2 = (deg[1]/vector_len) + offset1 + 1;
-  int test_offsets[3] = {0, offset1, offset2};
-  for (int i=0;i<3;++i) {
+  int offset3 = offset2 + 1; // should have a single empty SoA
+  int test_offsets[4] = {0, offset1, offset2, offset3};
+  for (int i=0;i<4;++i) {
     EXPECT_EQ( acdc._offsets[i], test_offsets[i] );
   }
   acdc._aosoa->access( 0 );
