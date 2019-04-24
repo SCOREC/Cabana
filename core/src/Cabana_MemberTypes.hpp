@@ -28,6 +28,16 @@ struct MemberTypes
     static constexpr std::size_t size = sizeof...(Types);
 };
 
+template <typename T, typename... Types>
+struct AppendMT;
+
+//Append type to the end
+template <typename T, typename... Types>
+struct AppendMT<T, MemberTypes<Types...> > {
+  static constexpr int size = 1 + MemberTypes<Types...>::size;
+  using type = MemberTypes<Types..., T>; //Put T before Types... to put at beginning
+};
+
 //---------------------------------------------------------------------------//
 // Static type checker.
 template<class >
@@ -69,6 +79,17 @@ struct MemberTypeAtIndex<I,MemberTypes<Types...> >
 {
     using type =
         typename MemberTypeAtIndexImpl<I,Types...>::type;
+};
+
+// class to append member types
+template <typename T, typename... Types>
+struct MemberTypesAppend;
+
+//Append type to the end
+template <typename T, typename... Types>
+struct MemberTypesAppend<T, MemberTypes<Types...> > {
+  static constexpr int size = 1 + MemberTypes<Types...>::size;
+  using type = MemberTypes<Types..., T>; //Put T before Types... to put at beginning
 };
 
 //---------------------------------------------------------------------------//

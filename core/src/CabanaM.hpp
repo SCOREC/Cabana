@@ -9,7 +9,6 @@
 
 #include <Kokkos_Core.hpp>
 
-
 namespace Cabana
 {
 /* class CabanaM */
@@ -19,7 +18,8 @@ class CabanaM
 {
   public:
 
-    using AoSoA_t = Cabana::AoSoA<DataTypes,MemorySpace>;
+    using CM_DT = Cabana::AppendMT<int,DataTypes>;
+    using AoSoA_t = Cabana::AoSoA<typename CM_DT::type,MemorySpace>;
 
   public:
     CabanaM()
@@ -41,6 +41,7 @@ class CabanaM
         int SoA_count = (deg[i]/_vector_length) + 1;
         _offsets[i+1] = SoA_count + _offsets[i];
       }
+
       _size = _offsets[elem_count];
       _aosoa->resize( _size );
     }
