@@ -33,8 +33,7 @@ void testCabanaM()
   const int dim_3 = 4;
 
   // deg array
-  const int deg[3] = {4, 1025, 0};
-  const int total_particles = deg[0] + deg[1] + deg[2];
+  const int deg[3] = {4, 1024, 0};
   const int deg_len = 3;
 
   // Declare data types.
@@ -46,13 +45,11 @@ void testCabanaM()
                               >;
   using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
   CabanaM_t acdc( deg, deg_len );
-  // TODO: maybe replaced with slicing?
+  // TODO: maybe replaced with slicing
   int vector_len = acdc._vector_length;
+  int ex_size = deg[0]/vector_len+deg[1]/vector_len+deg[2]/vector_len+deg_len;
   // Sanity check of sizes.
-  // FIXME total/vec_len isn't quite right needs to be each index of deg divided
-  // by vector len and added but with one small then one large entry it works
-  EXPECT_EQ( acdc._size, total_particles/vector_len + deg_len );
-  EXPECT_EQ( acdc._aosoa->size(), total_particles/vector_len + deg_len );
+  EXPECT_EQ( acdc._size, ex_size );
   printf("AoSoA vector length: %d\n", vector_len);
   printf("AoSoA size: %d\n", acdc._aosoa->size());
   printf("AoSoA numSoA: %d\n", acdc._aosoa->numSoA());
