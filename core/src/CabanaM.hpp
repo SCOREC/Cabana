@@ -53,10 +53,13 @@ class CabanaM
     std::size_t vector_length() const { return _vector_length; }
 
     KOKKOS_FUNCTION
-    int* offsets() const { return _offsets; }
+    int offset(int i) const { return _offsets[i]; }
 
-  //private:
-  public: // TODO: make private again
+    KOKKOS_FUNCTION
+    AoSoA_t* aosoa() { return _aosoa; }
+
+
+  private:
     std::size_t _size; // size of offset array
     std::size_t _vector_length;
     int *_offsets; // offset array for soa
