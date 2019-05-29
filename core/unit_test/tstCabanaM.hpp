@@ -18,8 +18,6 @@
 
 #include <gtest/gtest.h>
 
-#include <stdio.h> // FIXME: remove after debugging
-
 namespace Test
 {
 //---------------------------------------------------------------------------//
@@ -50,11 +48,6 @@ void testCabanaM()
   int ex_size = deg[0]/vector_len+deg[1]/vector_len+deg[2]/vector_len+deg_len;
   // Sanity check of sizes.
   EXPECT_EQ( cabanam.size(), ex_size );
-  /*
-  printf("AoSoA vector length: %d\n", vector_len);
-  printf("AoSoA size: %d\n", cabanam.size());
-  printf("AoSoA numSoA: %d\n", cabanam._aosoa->numSoA());
-  */
   int offset1 = (deg[0]/vector_len) + 1;
   int offset2 = (deg[1]/vector_len) + offset1 + 1;
   int offset3 = offset2 + 1; // should have a single empty SoA
@@ -63,7 +56,7 @@ void testCabanaM()
     EXPECT_EQ( cabanam.offset(i), test_offsets[i] );
   }
 }
-/*
+
 void testData()
 {
 
@@ -76,26 +69,24 @@ void testData()
   using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
   CabanaM_t cabanam( deg, deg_len );
 
-  auto slice_0 = cabanam.aosoa().slice<0>();
+  auto slice_0 = cabanam.aosoa()->slice<0>();
   float *p_float = slice_0.data();
-  int *p_int = cabanam.aosoa().slice<1>().data();
-  printf("%f %d\n", p_float[0], p_int[0]);
+  int *p_int = cabanam.aosoa()->slice<1>().data();
 
-  // TODO get stride lengths
-  // incorporate stride lengths into offet
-  // figure out how to iterate using offset
-  // maybe use access to get an SoA
-  for (int p=0; p<cabanam.offset(i); ++p) {
+  for (int i=0; i<deg_len; i++) {
+    for (int p=0; p<cabanam.offset(i); ++p) {
+      (void)p;
+    }
   }
-  //acdc._aosoa->access( 0 );
 }
-*/
+
 //---------------------------------------------------------------------------//
 // RUN TESTS
 //---------------------------------------------------------------------------//
 TEST_F( TEST_CATEGORY, aosoa_test )
 {
-    testCabanaM();
+  testCabanaM();
+  testData();
 }
 
 //---------------------------------------------------------------------------//
