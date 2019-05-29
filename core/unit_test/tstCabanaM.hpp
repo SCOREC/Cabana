@@ -61,9 +61,8 @@ void testCabanaM()
   int test_offsets[4] = {0, offset1, offset2, offset3};
   for (int i=0;i<4;++i) {
     EXPECT_EQ( cabanam.offset(i), test_offsets[i] );
-  }
 }
-
+/*
 void testData()
 {
 
@@ -76,22 +75,20 @@ void testData()
   using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
   CabanaM_t cabanam( deg, deg_len );
 
-  auto slice_0 = cabanam.aosoa()->slice<0>();
+  auto slice_0 = cabanam.aosoa().slice<0>();
   float *p_float = slice_0.data();
-  int *p_int = cabanam.aosoa()->slice<1>().data();
+  int *p_int = cabanam.aosoa().slice<1>().data();
   printf("%f %d\n", p_float[0], p_int[0]);
 
   // TODO get stride lengths
   // incorporate stride lengths into offet
   // figure out how to iterate using offset
   // maybe use access to get an SoA
-  for (int i=0; i<deg_len; i++) {
-    for (int p=0; p<cabanam.offset(i); ++p) {
-      (void)p;
-    }
+  for (int p=0; p<cabanam.offset(i); ++p) {
   }
+  //acdc._aosoa->access( 0 );
 }
-
+*/
 //---------------------------------------------------------------------------//
 // RUN TESTS
 //---------------------------------------------------------------------------//

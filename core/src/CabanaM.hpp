@@ -60,41 +60,6 @@ class CabanaM
     KOKKOS_FUNCTION
     AoSoA_t* aosoa() { return _aosoa; }
 
-    void rebuild()//int* new_parent, int num_new_ptcls, int* new_ptcl_parents)//, 
-//SOA* new_ptcl)
-    { //simd = vector length
-      int SIMD_WIDTH = ;
-      int count = (num_new_ptcls/SIMD_WIDTH) + 1;
-      int numAoSoA = num_new_ptcls - (SIMD_WIDTH * (count - 1));
-      int sizes[count] = {SIMD_WIDTH};
-      sizes[count] = numAoSoA;
-	auto dst = new AoSoA_t();
-     // AoSoA<typename CM_DT::type,MemorySpace> newAoSoA("src",count);
-     // AoSoA<typename CM_DT::type,MemorySpace> newAoSoA("src",count);
-     // auto copy = KOKKOS_LAMBDA(int s){
-/*        auto& soa = aosoa().access(s);
-	auto& newSoa = newAosoa().access(s);
-        for ( int i = 0; i < 3; ++i )
-          for ( int j = 0; j < 3; ++j )
-            for ( unsigned a = 0; a < aosoa().arraySize(s); ++a )
-              Cabana::get<0>(newSoa,a,i,j) = Cabana::get<0>(soa,a,i,j);
-
-        for ( int i = 0; i < 4; ++i )
-          for ( unsigned a = 0; a < aosoa().arraySize(s); ++a ) 
-
-        for ( unsigned a = 0; a < aosoa().arraySize(s); ++a )
-          Cabana::get<2>(newSoa,a) = Cabana::get<2>(soa,a);*/
-        //deep_copy(newAoSoA, aosoa);
-       deep_copy( dst, aosoa() );
-    //  };
-      //SimdPolicy<vector_length(),MemorySpace> simd_policy( 0, count-1 );
-     //simd_parallel_for(simd_policy, copy, "rebuild");
-     free(dst);
-     //lambda use: https://github.com/SCOREC/Cabana/blob/830dfbcaa0a3dfb3c66a888c86e765f05ec14ebc/core/unit_test/tstHalo.hpp
-     //
-    }
-
-
   private:
     std::size_t _size; // size of offset array
     std::size_t _vector_length;
