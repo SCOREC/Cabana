@@ -3,5 +3,14 @@ if(Cabana_ENABLE_Serial)
   target_link_libraries(NeighborListMDPerfTest cabanacore)
 endif()
 
-add_executable(PeakFlops Cabana_peakflops.cpp)
-target_link_libraries(PeakFlops cabanacore)
+# PeakFlops uses x86 asm volatile
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "([xX]86|[aA][mM][dD]64)")
+  add_executable(PeakFlops Cabana_peakflops.cpp)
+  target_link_libraries(PeakFlops cabanacore)
+endif()
+
+if(Cabana_ENABLE_MPI AND Cabana_ENABLE_Cuda AND Cabana_ENABLE_OpenMP)
+  add_executable(CommPerformance Cabana_CommPerformance.cpp)
+  target_link_libraries(CommPerformance cabanacore)
+
+endif()
