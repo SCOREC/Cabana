@@ -66,8 +66,8 @@ void testCabanaM()
 void testData()
 {
 
-  const int deg[3] = {4, 1024, 0};
-  const int deg_len = 3;
+  const int deg[2] = {4, 33};
+  const int deg_len = 2;
 
   using DataTypes = Cabana::MemberTypes<float,int>;
 
@@ -79,15 +79,18 @@ void testData()
   auto slice_int = cm.aosoa()->slice<1>();
 
 
-  Kokkos::View<int*,Kokkos::HostSpace> offsets_h("offsets_host",deg_len);
-  for (int i=0; i<deg_len; i++)
+  Kokkos::View<int*,Kokkos::HostSpace> offsets_h("offsets_host",deg_len+1);
+  for (int i=0; i<=deg_len; i++) {
     offsets_h(i) = cm.offset(i);
+    printf("offset[%3d] %3d\n", i, cm.offset(i));
+  }
   auto offsets_d = Kokkos::create_mirror_view_and_copy(
       TEST_MEMSPACE(), offsets_h);
 
-  const auto numPtcls = cm.size();
-  printf("numPtcls %d\n", numPtcls);
-  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy( 0, numPtcls );
+  const auto numSoa = cm.size();
+  printf("numSoa %d\n", numSoa);
+  //FIXME this needs to loop over the number of particles
+  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy( 0, numSoa );
   Cabana::simd_parallel_for(simd_policy, 
     KOKKOS_LAMBDA( const int soa, const int tuple ) {
       auto parentElm = -1;
