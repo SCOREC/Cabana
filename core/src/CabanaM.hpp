@@ -13,7 +13,7 @@
 
 namespace Cabana
 {
-/* class CabanaM */
+
 template<class DataTypes,
          class MemorySpace>
 class CabanaM
@@ -60,19 +60,18 @@ class CabanaM
     KOKKOS_FUNCTION
     AoSoA_t* aosoa() { return _aosoa; }
 
-    void rebuild(int* new_parent, int num_new_ptcls, int* new_ptcl_parents)//, 
+   void rebuild(int* new_parent, int num_new_ptcls, int* new_ptcl_parents)//, 
 //SOA* new_ptcl)
     {
       int SIMD_WIDTH = vector_length();
       int numSoA = this->aosoa()->numSoA();
-      int sizes[numSoA] = {0};
-      int newOffsets[offset(size())] = {0};
+      std::vector<int> sizes(numSoA, 0);
+      int newOffsets[numSoA] = {0};
+      auto slice_int = this->aosoa()->slice();//got rid of <1>, now it works
       //first loop to count number of particles per element (atomic)
-      //for (int i =0; i < size(); i++){
-      Kokkos::parallel_for("particlesPerElement", size(), KOKKOS_LAMBDA(const int& i){
-          Kokkos::atomic_increment(&sizes[offset(i)]); //use mask instead?
-      )};
-     // }
+      Kokkos::parallel_for("particlesPerElement", size(), KOKKOS_LAMBDA(const int& i, const int& a){
+          Kokkos::atomic_increment(sizes[slice_int.access(i,a)]);
+      });
       CabanaM newCabanaM(sizes, size() + num_new_ptcls);
       //fill by usig offset array to find (in the old cabana)  all the particles for an element, then store them next to each other in the new cabana
       Kokkos::parallel_scan(this->sizes.size(), newOffsets, KOKKOS_LAMBDA( const int& i, int& upd, const bool& last) {
@@ -82,19 +81,19 @@ class CabanaM
         } 
 	upd+= val_i;
       });
-      Kokkos::parallel_for("BtoA", numSoA, KOKKOS_LAMBDA(int a){
-      //for (int a = 0; a < numSoA; a++){
-	int b = offset(a); //mask?
+      Kokkos::parallel_for("BtoA", numSoA, KOKKOS_LAMBDA(int i, int a){
+	int b = slice_int.access(i, a);
 	auto first = newCabanaM.offset(b);
-	auto j = Kokkos::atomic_fetch_add<int>(&sizes[offset(a)], 1);
-	Kokkos::parallel_for("collect", offset(a+1) - offset(a), KOKKOS_LAMBDA(a){
+	auto j = Kokkos::atomic_fetch_add<int>(&sizes[slice_int.access(i,a)], 1);
+	//Kokkos::parallel_for("collect", offset(a+1) - offset(a), KOKKOS_LAMBDA(a){
+        for (int z = offset(a); z < offset(a+1); ++z){ //cant have 2 embedded parallel loops
           auto tp= aosoa().getTuple(a);
-          newCabanaM.aosoa()->setTuple(a,tp);
-        )};
-      )};
-    //}
-    //free(this);
-    }
+          newCabanaM->aosoa()->setTuple(a,tp);
+	  }
+       // });
+      });
+    free(this);
+   }
 
   private:
     std::size_t _size; // size of offset array
@@ -107,3 +106,4 @@ class CabanaM
 } // end namespace Cabana
 
 #endif // CABANAM_HPP
+
