@@ -7,57 +7,54 @@
 
 #include <gtest/gtest.h>
 
-#include <stdio.h> // FIXME: remove after debugging
-
 namespace Test
 {
 //---------------------------------------------------------------------------//
 //// Test an CabanaM
 void testRebuild() {
-printf("I hope this works!");
+  const int deg[2] = {4, 1024};
+  const int deg_len = 2;
 
+  using DataTypes = Cabana::MemberTypes<int,int>; //slice 0 gives new parent elemet id (input)
 
-  const int dim_1 = 3;
-  const int dim_2 = 2;
-  const int dim_3 = 4;
-
-  const int deg[3] = {4, 1024, 0};
-  const int deg_len = 3;
-
- using DataTypes =
-      Cabana::MemberTypes<float[dim_1][dim_2][dim_3],
-                              int,
-                              double[dim_1],
-                              double[dim_1][dim_2]
-                              >;
+  using AoSoA_t = Cabana::AoSoA<DataTypes,TEST_MEMSPACE>;
   using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
-  CabanaM_t acdc( deg, deg_len );
- int vector_len = acdc._vector_length;
-  int ex_size = deg[0]/vector_len+deg[1]/vector_len+deg[2]/vector_len+deg_len;
-EXPECT_EQ( acdc._size, ex_size );
-  printf("AoSoA vector length: %d\n", vector_len);
-  printf("AoSoA size: %d\n", acdc._aosoa->size());
-  printf("AoSoA numSoA: %d\n", acdc._aosoa->numSoA());
-  int offset1 = (deg[0]/vector_len) + 1;
-  int offset2 = (deg[1]/vector_len) + offset1 + 1;
-  int offset3 = offset2 + 1; // should have a single empty SoA
-  int test_offsets[4] = {0, offset1, offset2, offset3};
-  for (int i=0;i<4;++i) {
-    EXPECT_EQ( acdc._offsets[i], test_offsets[i] );
-  }
-  acdc._aosoa->access( 0 );
-  rebuild();
-  printf("after rebuild:\n")
-  EXPECT_EQ( acdc._size, ex_size );
-  printf("AoSoA vector length: %d\n", vector_len);
-  printf("AoSoA size: %d\n", acdc._aosoa->size());
-  printf("AoSoA numSoA: %d\n", acdc._aosoa->numSoA());
-for (int i=0;i<4;++i) {
-    EXPECT_EQ( acdc._offsets[i], test_offsets[i] );
-  }
-  acdc._aosoa->access( 0 );
+  CabanaM_t cm( deg, deg_len );
+
+  auto slice_float = cm.aosoa()->slice<0>();
+  auto slice_int = cm.aosoa()->slice<1>();
+  const auto numPtcls = cm.size();
+
+  Kokkos::View<int*,Kokkos::HostSpace> offsets_h("offsets_host",deg_len);
+  for (int i=0; i<deg_len; i++)
+    offsets_h(i) = cm.offset(i);
+  auto offsets_d = Kokkos::create_mirror_view_and_copy(
+      TEST_MEMSPACE(), offsets_h);
+
+  printf("numPtcls %d\n", numPtcls);
+  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy( 0, numPtcls );
+  Cabana::simd_parallel_for(simd_policy, 
+    KOKKOS_LAMBDA( const int soa, const int tuple ) {
+      auto parentElm = -1;
+      printf("soa a parentElm %4d %4d %4d\n", soa, tuple, parentElm);
+    }, "foo");
+  
+  Cabana::Tuple<DataTypes> change = cm.aosoa()->getTuple(0);
+/*    for ( int i = 0; i < 4; ++i ) {
+      Cabana::get<0>(change,i) = 5;
+    }
+  */  Cabana::get<1>(change, 0) = 7;
+
+  cm.aosoa()->setTuple(1, change);  
+  cm.rebuild();
+  
+  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy2( 0, numPtcls );
+  Cabana::simd_parallel_for(simd_policy2,
+    KOKKOS_LAMBDA( const int soa2, const int tuple2 ) {
+      printf("soa a parentElm %4d %4d %4d\n", soa2, tuple2, parentElm2);
+    }, "foo");
 }
-TEST_F( TEST_CATEGORY, aosoa_test )
+TEST( TEST_CATEGORY, aosoa_test )
 {
     testRebuild();
 }
