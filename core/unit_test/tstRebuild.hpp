@@ -1,4 +1,5 @@
 #include <Cabana_Types.hpp>
+#include <Cabana_Types.hpp>
 #include <CabanaM.hpp>
 #include <impl/Cabana_Index.hpp>
 #include <impl/Cabana_PerformanceTraits.hpp>
@@ -10,52 +11,137 @@
 namespace Test
 {
 //---------------------------------------------------------------------------//
-//// Test an CabanaM
+//// Test Rebuild
 void testRebuild() {
-  const int deg[2] = {4, 1024};
+  const int deg[2] = {4, 2};
   const int deg_len = 2;
 
-  using DataTypes = Cabana::MemberTypes<int,int>; //slice 0 gives new parent elemet id (input)
-
+  using DataTypes = Cabana::MemberTypes<int,int>;
   using AoSoA_t = Cabana::AoSoA<DataTypes,TEST_MEMSPACE>;
   using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
-  CabanaM_t cm( deg, deg_len );
+  CabanaM_t cm(deg, deg_len);
+  cm.aosoa()->resize(64);
 
-  auto slice_float = cm.aosoa()->slice<0>();
-  auto slice_int = cm.aosoa()->slice<1>();
   const auto numPtcls = cm.size();
+  auto new_parents = cm.aosoa()->slice<0>();
+  auto old_parents = cm.aosoa()->slice<1>();
+  auto new_actives = cm.aosoa()->slice<2>();
 
-  Kokkos::View<int*,Kokkos::HostSpace> offsets_h("offsets_host",deg_len);
-  for (int i=0; i<deg_len; i++)
-    offsets_h(i) = cm.offset(i);
-  auto offsets_d = Kokkos::create_mirror_view_and_copy(
-      TEST_MEMSPACE(), offsets_h);
-
-  printf("numPtcls %d\n", numPtcls);
-  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy( 0, numPtcls );
-  Cabana::simd_parallel_for(simd_policy, 
-    KOKKOS_LAMBDA( const int soa, const int tuple ) {
-      auto parentElm = -1;
-      printf("soa a parentElm %4d %4d %4d\n", soa, tuple, parentElm);
-    }, "foo");
-  
-  Cabana::Tuple<DataTypes> change = cm.aosoa()->getTuple(0);
-/*    for ( int i = 0; i < 4; ++i ) {
-      Cabana::get<0>(change,i) = 5;
+  int new_parents_d[64];
+  for (int pos = 0; pos < 64; pos++){
+    if (pos < 32){
+      new_parents_d[pos] = 0;
     }
-  */  Cabana::get<1>(change, 0) = 7;
-
-  cm.aosoa()->setTuple(1, change);  
-  cm.rebuild();
+    else {
+      new_parents_d[pos] = 1;
+    }
+  }
   
-  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy2( 0, numPtcls );
-  Cabana::simd_parallel_for(simd_policy2,
-    KOKKOS_LAMBDA( const int soa2, const int tuple2 ) {
-      printf("soa a parentElm %4d %4d %4d\n", soa2, tuple2, parentElm2);
-    }, "foo");
-}
+  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> parent_policy(0, 64);
+  Cabana::simd_parallel_for(parent_policy, 
+    KOKKOS_LAMBDA( const int soa, const int tuple ) {
+      if (tuple == 1 && soa == 0){
+        new_parents.access(soa,tuple) = 1;
+      }
+      else if (soa == 1){
+        old_parents.access(soa,tuple) = 1;
+        new_parents.access(soa,tuple) = 1;
+      }
+      else {
+        new_parents.access(soa, tuple) = soa;
+      }
+      }, "set_parent");
+
+    Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> active_policy(0, 64);
+    Cabana::simd_parallel_for(active_policy,
+      KOKKOS_LAMBDA( const int soa, const int tuple ) {
+        if ((tuple < 4 && soa == 0) || (soa == 1 && tuple<2) ){
+          new_actives.access(soa, tuple) = 1;
+        }
+        else {
+          new_actives.access(soa, tuple) = 0;
+        }
+        }, "set_active");
+  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy(0, 64);
+  Cabana::simd_parallel_for(simd_policy, 
+    KOKKOS_LAMBDA(const int soa, const int tuple) {
+      printf("SoA: %d, Tuple: %d, New Parent: %d, Old Parent: %d, Active: %d\n", soa, tuple, new_parents.access(soa, tuple), old_parents.access(soa, tuple),  new_actives.access(soa,tuple));
+    }, "Final_Print");
+  
+  cm.rebuild(new_parents_d);
+  }
+
+void testBiggerRebuild(){
+  const int deg[3] = {4, 2,16};
+  const int deg_len = 3;
+  const int totalSize = 96;
+  using DataTypes = Cabana::MemberTypes<int,int>;
+  using AoSoA_t = Cabana::AoSoA<DataTypes,TEST_MEMSPACE>;
+  using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
+  CabanaM_t cm(deg, deg_len);
+  cm.aosoa()->resize(96);
+
+  const auto numPtcls = cm.size();
+  auto new_parents = cm.aosoa()->slice<0>();
+  auto old_parents = cm.aosoa()->slice<1>();
+  auto new_actives = cm.aosoa()->slice<2>();
+
+  int new_parents_d[totalSize];
+  for (int pos = 0; pos < totalSize; pos++){
+    if (pos < 32){
+      new_parents_d[pos] = 0;
+    }   
+    else if (pos < 64){
+      new_parents_d[pos] = 1;
+    }   
+    else{
+      new_parents_d[pos] = 2;
+    }
+  }
+  
+  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> parent_policy(0, totalSize);
+  Cabana::simd_parallel_for(parent_policy, 
+    KOKKOS_LAMBDA( const int soa, const int tuple ) { 
+      if (tuple == 1 && soa == 0){ 
+        new_parents.access(soa,tuple) = 1;
+      }
+      else if (tuple == 10 && soa == 2){
+        new_parents.access(soa,tuple) = 0;
+      }
+      else if (soa == 1){ 
+        old_parents.access(soa,tuple) = 1;
+        new_parents.access(soa,tuple) = 1;
+      }
+      else if (soa == 2){
+        old_parents.access(soa,tuple) = 2;
+        new_parents.access(soa,tuple) = 2;
+      }
+      else {
+        new_parents.access(soa, tuple) = soa;
+      }   
+      }, "set_parent");
+
+  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> active_policy(0, totalSize);
+  Cabana::simd_parallel_for(active_policy,
+    KOKKOS_LAMBDA( const int soa, const int tuple ) {
+      if ((tuple < 4 && soa == 0) || (soa == 1 && tuple<2) || (soa == 2 && tuple < 16)){
+        new_actives.access(soa, tuple) = 1;
+      }
+      else {
+        new_actives.access(soa, tuple) = 0;
+      }
+      }, "set_active");
+  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy(0, totalSize);
+  Cabana::simd_parallel_for(simd_policy,
+    KOKKOS_LAMBDA(const int soa, const int tuple) {
+      printf("SoA: %d, Tuple: %d, New Parent: %d, Old Parent: %d, Active: %d\n", soa, tuple, new_parents.access(soa, tuple), old_parents.access(soa, tuple),  new_actives.access(soa,tuple));
+    }, "Final_Print");
+  cm.rebuild(new_parents_d);
+  }
+
 TEST( TEST_CATEGORY, aosoa_test )
 {
     testRebuild();
+    testBiggerRebuild();
 }
 }
