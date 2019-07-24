@@ -20,7 +20,6 @@ void testRebuild() {
   using AoSoA_t = Cabana::AoSoA<DataTypes,TEST_MEMSPACE>;
   using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
   CabanaM_t cm(deg, deg_len);
-  cm.aosoa()->resize(64);
 
   const auto numPtcls = cm.size();
   auto new_parents = cm.aosoa()->slice<0>();
@@ -36,8 +35,9 @@ void testRebuild() {
       new_parents_d[pos] = 1;
     }
   }
-  
-  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> parent_policy(0, 64);
+  auto numtuples = cm.size(); 
+  printf("numtuples (capacity of aosoa) %d\n", numtuples);
+  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> parent_policy(0, numtuples);
   Cabana::simd_parallel_for(parent_policy, 
     KOKKOS_LAMBDA( const int soa, const int tuple ) {
       if (tuple == 1 && soa == 0){
@@ -52,7 +52,7 @@ void testRebuild() {
       }
       }, "set_parent");
 
-    Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> active_policy(0, 64);
+    Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> active_policy(0, numtuples);
     Cabana::simd_parallel_for(active_policy,
       KOKKOS_LAMBDA( const int soa, const int tuple ) {
         if ((tuple < 4 && soa == 0) || (soa == 1 && tuple<2) ){
@@ -62,7 +62,7 @@ void testRebuild() {
           new_actives.access(soa, tuple) = 0;
         }
         }, "set_active");
-  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy(0, 64);
+  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy(0, numtuples);
   Cabana::simd_parallel_for(simd_policy, 
     KOKKOS_LAMBDA(const int soa, const int tuple) {
       printf("SoA: %d, Tuple: %d, New Parent: %d, Old Parent: %d, Active: %d\n", soa, tuple, new_parents.access(soa, tuple), old_parents.access(soa, tuple),  new_actives.access(soa,tuple));
@@ -72,6 +72,7 @@ void testRebuild() {
   }
 
 void testBiggerRebuild(){
+  printf("\n------- big test -------\n");
   const int deg[3] = {4, 2,16};
   const int deg_len = 3;
   const int totalSize = 96;
@@ -79,7 +80,6 @@ void testBiggerRebuild(){
   using AoSoA_t = Cabana::AoSoA<DataTypes,TEST_MEMSPACE>;
   using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
   CabanaM_t cm(deg, deg_len);
-  cm.aosoa()->resize(96);
 
   const auto numPtcls = cm.size();
   auto new_parents = cm.aosoa()->slice<0>();

@@ -44,7 +44,7 @@ class CabanaM
         int SoA_count = (deg[i]/_vector_length) + 1;
         _offsets[i+1] = SoA_count + _offsets[i];
       }
-      _size = _offsets[elem_count];
+      _size = _offsets[elem_count] * _vector_length;
       _aosoa->resize( _size); 
     }
 
@@ -68,22 +68,21 @@ class CabanaM
       int sizesArray[numSoA];
       Kokkos::View<int*> sizes("new_sizes", numSoA);
       Kokkos::View<int*> newOffsets("new_offsets", numSoA);
-      auto slice_int = slice<2>(*aosoa()); //user input of destination
+      auto active = slice<2>(*aosoa());
       using ExecutionSpace = Kokkos::DefaultExecutionSpace;
       //first loop to count number of particles per element (atomic)
       auto atomic = KOKKOS_LAMBDA(const int& i,const int& a){
-        if (slice_int.access(i,a) == 1){
+        if (active.access(i,a) == 1){
           Kokkos::atomic_increment<int>(&sizes(i));
         }
       };
-      Cabana::SimdPolicy<SIMD_WIDTH,ExecutionSpace> simd_policy( 0, SIMD_WIDTH * numSoA); 
+      Cabana::SimdPolicy<SIMD_WIDTH,ExecutionSpace> simd_policy( 0, size()); 
       Cabana::simd_parallel_for( simd_policy, atomic, "atomic" );
-      Kokkos::parallel_for(size(), KOKKOS_LAMBDA(const int i){
+      Kokkos::parallel_for(numSoA, KOKKOS_LAMBDA(const int i){
          auto current_size = sizes(i);
          printf("Degree of %d at position %d\n", current_size, i); 
       });
       newOffsets = sizes;
- //    Kokkos::deep_copy(newOffsets, sizes);
       Kokkos::parallel_scan (numSoA, KOKKOS_LAMBDA (const int& i, int& upd, const bool &last) {
           const int val_i = newOffsets(i);
           if (last){
@@ -102,7 +101,7 @@ class CabanaM
          sizesArray[l] = sizes2(l); //current_size;//causes segfault for some reason (kokkos view error)
       }
     //start copy from b->a
-      CabanaM newCabanaM(sizesArray, size());
+      CabanaM newCabanaM(sizesArray, numSoA);
       auto slice0 = slice<0>(*newCabanaM.aosoa());
       auto slice1 = slice<1>(*newCabanaM.aosoa());
       auto slice2 = slice<2>(*newCabanaM.aosoa());
