@@ -57,6 +57,42 @@ class CabanaM
       for( int elm=0; elm<elem_count; elm++ )
         for( int soa=_offsets[elm]; soa<_offsets[elm+1]; soa++)
           _parentElm[soa]=elm;
+
+      Kokkos::View<int*,Kokkos::HostSpace> deg_h("degree_host",deg_len);
+      for (int i=0; i<deg_len; i++)
+        deg_h(i) = deg[i];
+      auto deg_d = Kokkos::create_mirror_view_and_copy(
+          AoSoA_t::memory_space, offsets_h);
+
+      Kokkos::View<int*,Kokkos::HostSpace> parent_h("parent_host",_numSoa);
+      for (int i=0; i<_numSoa; i++)
+        parent_h(i) = _parentElm[i];
+      auto parent_d = Kokkos::create_mirror_view_and_copy(
+          AoSoA_t::memory_space, parent_h);
+
+      Kokkos::View<int*,Kokkos::HostSpace> offset_h("offset_host",deg_len+1);
+      for (int i=0; i<=deg_len; i++)
+        offset_h(i) = _offsets[i];
+      auto offset_d = Kokkos::create_mirror_view_and_copy(
+          AoSoA_t::memory_space, offset_h);
+
+      const auto activeSliceIdx = _aosoa->number_of_members-1;
+      printf("number of member types %d\n", activeSliceIdx+1);
+      auto active = slice<activeSliceIdx>(*_aosoa);
+      Cabana::SimdPolicy<AoSoA_t::vector_length,AoSoA_t::execution_space> simd_policy( 0, capacity() );
+      Cabana::simd_parallel_for(simd_policy,
+        KOKKOS_LAMBDA( const int soa, const int ptcl ) {
+          auto elm = parent_d(soa);
+          auto d = deg_d(elm);
+          auto soaDeg = 0;
+          if( soa < offset_d(elm+1) ) {
+            //all active
+          } else {
+            //compute remainder
+          }
+          // if ptcl < remainder then set active
+          active.access(soa,ptcl) = 1;
+      }, "set_active");
     }
 
     KOKKOS_FUNCTION
@@ -83,73 +119,48 @@ class CabanaM
     KOKKOS_FUNCTION
     AoSoA_t* aosoa() { return _aosoa; }
 
-   void rebuild(int* new_parent/*, int num_new_ptcls, int* new_ptcl_parents*/)
-//,SOA* new_ptcl)
-    {
-      const int SIMD_WIDTH = 32/*vector_length()*/; //cant be from a function call
-      int numSoA = this->aosoa()->numSoA();
-      int sizesArray[numSoA];
-      Kokkos::View<int*> sizes("new_sizes", numSoA);
-      Kokkos::View<int*> newOffsets("new_offsets", numSoA);
-      auto active = slice<2>(*aosoa());
+   void rebuild() {
+      const int SIMD_WIDTH = 32; //FIXME
+      int sizesArray[_numElms];
+      Kokkos::View<int*> elmDegree("elmDegree", _numElms);
+      Kokkos::View<int*> elmOffsets("elmOffsets", _numElms);
+      auto newParent = slice<0>(*aosoa());
+      auto active = slice<1>(*aosoa());
       using ExecutionSpace = Kokkos::DefaultExecutionSpace;
-      //first loop to count number of particles per element (atomic)
-      auto atomic = KOKKOS_LAMBDA(const int& i,const int& a){
-        if (active.access(i,a) == 1){
-          Kokkos::atomic_increment<int>(&sizes(i));
+      //first loop to count number of particles per new element (atomic)
+      auto atomic = KOKKOS_LAMBDA(const int& soa,const int& tuple){
+        if (active.access(soa,tuple) == 1){
+          auto parent = newParent.access(soa,tuple);
+          Kokkos::atomic_increment<int>(&elmDegree(parent));
         }
       };
-      Cabana::SimdPolicy<SIMD_WIDTH,ExecutionSpace> simd_policy( 0, size()); 
+      Cabana::SimdPolicy<SIMD_WIDTH,ExecutionSpace> simd_policy( 0, capacity() );
       Cabana::simd_parallel_for( simd_policy, atomic, "atomic" );
-      Kokkos::parallel_for(numSoA, KOKKOS_LAMBDA(const int i){
-         auto current_size = sizes(i);
-         printf("Degree of %d at position %d\n", current_size, i); 
+
+      //print the number of particles per new element
+      Kokkos::parallel_for(_numElms, KOKKOS_LAMBDA(const int i){
+         printf("Degree of element %d = %d\n", i, elmDegree(i));
       });
-      newOffsets = sizes;
-      Kokkos::parallel_scan (numSoA, KOKKOS_LAMBDA (const int& i, int& upd, const bool &last) {
-          const int val_i = newOffsets(i);
+
+      //build the offsets array - is this necessary?
+      Kokkos::parallel_scan (_numElms, KOKKOS_LAMBDA (const int& i, int& upd, const bool &last) {
+          const int val_i = elmDegree(i);
           if (last){
-            newOffsets(i) = upd;
-          } 
+            elmOffsets(i) = upd;
+          }
           upd+= val_i;
       });
-      
-      Kokkos::parallel_for(numSoA, KOKKOS_LAMBDA(const int i){
-        auto current_offset = newOffsets(i);
+
+      Kokkos::parallel_for(_numElms, KOKKOS_LAMBDA(const int i){
+        auto current_offset = elmOffsets(i);
         printf("Offset of %d at position %d\n", current_offset, i);
       });
-      Kokkos::View<int*>::HostMirror sizes2 = create_mirror_view(sizes);
-      for (int l = 0; l < numSoA; l++){
-        // int current_size = sizes(i);
+      Kokkos::View<int*>::HostMirror sizes2 = create_mirror_view(elmDegree);
+      for (int l = 0; l < _numElms; l++){
          sizesArray[l] = sizes2(l); //current_size;//causes segfault for some reason (kokkos view error)
       }
     //start copy from b->a
-      CabanaM newCabanaM(sizesArray, numSoA);
-      auto slice0 = slice<0>(*newCabanaM.aosoa());
-      auto slice1 = slice<1>(*newCabanaM.aosoa());
-      auto slice2 = slice<2>(*newCabanaM.aosoa());
-      auto oldSlice0 = slice<0>(*aosoa());
-      auto oldSlice1 = slice<1>(*aosoa());
-      auto oldSlice2 = slice<2>(*aosoa());
-      //fill by usig offset array to find (in the old cabana)  all the particles for an element, then store them next to each other in the new cabana
-      auto BtoA = KOKKOS_LAMBDA(const int& i, const int& a){
-    //    int b = slice_int.access(i, a);//returns bool fix
-   //     auto first = newCabanaM._offsets(b);//new offsets
-   //     auto j = Kokkos::atomic_fetch_add<int>(&sizes[slice_int.access(i,a)], 1);
-    //    auto tp= aosoa().getTuple(a);
-          slice0.access(i,a) = oldSlice0.access(i,a);
-          slice1.access(i,a) = oldSlice1.access(i,a);
-          slice2.access(i,a) = oldSlice2.access(i,a);
-        //newCabanaM->aosoa()->setTuple(a,tp);
-        };
-      Cabana::SimdPolicy<SIMD_WIDTH,ExecutionSpace> BtoA_policy( 0, numSoA);
-      Cabana::simd_parallel_for( BtoA_policy, BtoA, "BtoA" );
-     auto printBtoA = KOKKOS_LAMBDA(const int& i, const int& a){
-       printf("For slice 0, SoA: %d Tuple: %d Old Value: %d New Value: %d\n", i, a, oldSlice0.access(i,a), slice0.access(i,a));
-       printf("For slice 1, SoA: %d Tuple: %d Old Value: %d New Value: %d\n", i, a, oldSlice1.access(i,a), slice1.access(i,a));
-       printf("For slice 2, SoA: %d Tuple: %d Old Value: %d New Value: %d\n", i, a, oldSlice2.access(i,a), slice2.access(i,a));
-     };
-     Cabana::simd_parallel_for(BtoA_policy, printBtoA, "BtoA_print");
+      CabanaM newCabanaM(sizesArray, _numElms);
   }
 
   private:
