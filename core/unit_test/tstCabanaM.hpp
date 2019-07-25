@@ -26,6 +26,7 @@ namespace Test
 // Test an CabanaM
 void testCabanaM()
 {
+  printf("\n====testCabanaM====\n");
 
   // Data dimensions.
   const int dim_1 = 3;
@@ -49,12 +50,7 @@ void testCabanaM()
   int vector_len = cabanam.vector_length();
   int ex_size = deg[0]/vector_len+deg[1]/vector_len+deg[2]/vector_len+deg_len;
   // Sanity check of sizes.
-  EXPECT_EQ( cabanam.size(), ex_size );
-  /*
-  printf("AoSoA vector length: %d\n", vector_len);
-  printf("AoSoA size: %d\n", cabanam.size());
-  printf("AoSoA numSoA: %d\n", cabanam._aosoa->numSoA());
-  */
+  EXPECT_EQ( cabanam.numSoa(), ex_size );
   int offset1 = (deg[0]/vector_len) + 1;
   int offset2 = (deg[1]/vector_len) + offset1 + 1;
   int offset3 = offset2 + 1; // should have a single empty SoA
@@ -65,6 +61,7 @@ void testCabanaM()
 /*
 void testData()
 {
+  printf("\n====testData====\n");
 
   const int deg[2] = {4, 33};
   const int deg_len = 2;
@@ -78,24 +75,32 @@ void testData()
   auto slice_float = cm.aosoa()->slice<0>();
   auto slice_int = cm.aosoa()->slice<1>();
 
-
   Kokkos::View<int*,Kokkos::HostSpace> offsets_h("offsets_host",deg_len+1);
   for (int i=0; i<=deg_len; i++) {
     offsets_h(i) = cm.offset(i);
     printf("offset[%3d] %3d\n", i, cm.offset(i));
   }
+  printf("before mirror view and copy\n");
   auto offsets_d = Kokkos::create_mirror_view_and_copy(
       TEST_MEMSPACE(), offsets_h);
 
-  const auto numSoa = cm.size();
-  printf("numSoa %d\n", numSoa);
-  //FIXME this needs to loop over the number of particles
-  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy( 0, numSoa );
+  auto numsoa = offsets_h(deg_len);
+  const auto capacity = cm.capacity();
+  const auto soaSize = cm.vector_length();
+  printf("capacity %d soaSize %d numsoa %d\n", capacity, soaSize, numsoa);
+
+  Kokkos::View<int*,Kokkos::HostSpace> parentElm_h("parentElm_host",numsoa);
+  for (int i=0; i<numsoa; i++)
+    parentElm_h(i) = cm.parentElm(i);
+  auto parentElm_d = Kokkos::create_mirror_view_and_copy(
+      TEST_MEMSPACE(), parentElm_h);
+
+  Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy( 0, capacity );
   Cabana::simd_parallel_for(simd_policy, 
-    KOKKOS_LAMBDA( const int soa, const int tuple ) {
-      auto parentElm = -1;
-      printf("soa a parentElm %4d %4d %4d\n", soa, tuple, parentElm);
-    }, "foo");
+    KOKKOS_LAMBDA( const int soa, const int ptcl ) {
+      auto parent = parentElm_d(soa);
+      printf("parentElm soa ptcl %4d %4d %4d\n", parent, soa, ptcl);
+  }, "testprint");
 }
 */
 //---------------------------------------------------------------------------//

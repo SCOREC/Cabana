@@ -25,9 +25,12 @@ class CabanaM
 
   public:
     CabanaM()
-      : _size( 0 )
+      : _numPtcls( 0 )
+      , _numElms( 0 )
+      , _numSoa( 0 )
       , _vector_length( 0 )
       , _offsets( NULL )
+      , _parentElm( NULL )
       , _aosoa( NULL )
     {}
 
@@ -38,24 +41,44 @@ class CabanaM
       _vector_length = Impl::PerformanceTraits<
              typename MemorySpace::execution_space>::vector_length;
       _offsets = new int[elem_count+1]();
+      _numElms = elem_count;
       // elem at i owns SoA offsets[i+1] - offsets[i]
       _offsets[0] = 0;
       for ( int i=0; i<elem_count; ++i ) {
         int SoA_count = (deg[i]/_vector_length) + 1;
         _offsets[i+1] = SoA_count + _offsets[i];
+        printf("%3d soa_count %3d\n", i, SoA_count);
       }
-      _size = _offsets[elem_count] * _vector_length;
-      _aosoa->resize( _size); 
+      _numSoa = _offsets[elem_count];
+      _numPtcls = _offsets[elem_count]*_vector_length;
+      _aosoa->resize(_numPtcls);
+      assert(_numSoa == _aosoa->numSoA());
+      _parentElm = new int[_numSoa];
+      for( int elm=0; elm<elem_count; elm++ )
+        for( int soa=_offsets[elm]; soa<_offsets[elm+1]; soa++)
+          _parentElm[soa]=elm;
     }
 
     KOKKOS_FUNCTION
-    std::size_t size() const { return _size; }
+    std::size_t numSoa() const { return _numSoa; }
+
+    KOKKOS_FUNCTION
+    std::size_t numParticles() const { return _numPtcls; }
+
+    KOKKOS_FUNCTION
+    int capacity() const { return _vector_length * _aosoa->numSoA(); }
+
+    KOKKOS_FUNCTION
+    std::size_t numElements() const { return _numElms; }
 
     KOKKOS_FUNCTION
     std::size_t vector_length() const { return _vector_length; }
 
     KOKKOS_FUNCTION
     int offset(int i) const { return _offsets[i]; }
+
+    KOKKOS_FUNCTION
+    int parentElm(int i) const { return _parentElm[i]; }
 
     KOKKOS_FUNCTION
     AoSoA_t* aosoa() { return _aosoa; }
@@ -130,9 +153,12 @@ class CabanaM
   }
 
   private:
-    std::size_t _size; // size of offset array
+    std::size_t _numPtcls;
+    std::size_t _numElms;
+    std::size_t _numSoa;
     std::size_t _vector_length;
     int *_offsets; // offset array for soa
+    int *_parentElm; // parent elm for each soa
     AoSoA_t *_aosoa; // pointer to AoSoA
 
 };
