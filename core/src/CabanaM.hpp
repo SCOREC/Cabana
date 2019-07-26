@@ -22,6 +22,8 @@ class CabanaM
 
     using CM_DT = Cabana::AppendMT<int,DataTypes>;
     using AoSoA_t = Cabana::AoSoA<typename CM_DT::type,MemorySpace>;
+    using memspace = typename MemorySpace::memory_space;
+    using exespace = typename MemorySpace::execution_space;
 
   public:
     CabanaM()
@@ -57,41 +59,49 @@ class CabanaM
       for( int elm=0; elm<elem_count; elm++ )
         for( int soa=_offsets[elm]; soa<_offsets[elm+1]; soa++)
           _parentElm[soa]=elm;
+      setActive(deg);
+    }
 
-      Kokkos::View<int*,Kokkos::HostSpace> deg_h("degree_host",deg_len);
-      for (int i=0; i<deg_len; i++)
+    void setActive(const int* deg) {
+      Kokkos::View<int*,Kokkos::HostSpace> deg_h("degree_host",_numElms);
+      for (int i=0; i<_numElms; i++)
         deg_h(i) = deg[i];
       auto deg_d = Kokkos::create_mirror_view_and_copy(
-          AoSoA_t::memory_space, offsets_h);
+          memspace(), deg_h);
 
       Kokkos::View<int*,Kokkos::HostSpace> parent_h("parent_host",_numSoa);
       for (int i=0; i<_numSoa; i++)
         parent_h(i) = _parentElm[i];
-      auto parent_d = Kokkos::create_mirror_view_and_copy(
-          AoSoA_t::memory_space, parent_h);
+      auto parent_d = Kokkos::create_mirror_view_and_copy(memspace(), parent_h);
 
-      Kokkos::View<int*,Kokkos::HostSpace> offset_h("offset_host",deg_len+1);
-      for (int i=0; i<=deg_len; i++)
+      Kokkos::View<int*,Kokkos::HostSpace> offset_h("offset_host",_numElms+1);
+      for (int i=0; i<=_numElms; i++)
         offset_h(i) = _offsets[i];
-      auto offset_d = Kokkos::create_mirror_view_and_copy(
-          AoSoA_t::memory_space, offset_h);
+      auto offset_d = Kokkos::create_mirror_view_and_copy(memspace(), offset_h);
 
+      const auto cap = capacity();
       const auto activeSliceIdx = _aosoa->number_of_members-1;
       printf("number of member types %d\n", activeSliceIdx+1);
       auto active = slice<activeSliceIdx>(*_aosoa);
-      Cabana::SimdPolicy<AoSoA_t::vector_length,AoSoA_t::execution_space> simd_policy( 0, capacity() );
+      Cabana::SimdPolicy<AoSoA_t::vector_length,Kokkos::Cuda> simd_policy( 0, cap );
       Cabana::simd_parallel_for(simd_policy,
         KOKKOS_LAMBDA( const int soa, const int ptcl ) {
-          auto elm = parent_d(soa);
-          auto d = deg_d(elm);
-          auto soaDeg = 0;
-          if( soa < offset_d(elm+1) ) {
-            //all active
-          } else {
-            //compute remainder
+          const auto elm = parent_d(soa);
+          const auto numsoa = offset_d(elm+1)-offset_d(elm);
+          const auto lastsoa = offset_d(elm+1)-1;
+          const auto elmdeg = deg_d(elm);
+          const auto soaLen = 32; //FIXME
+          const auto lastSoaDeg = soaLen - ((numsoa * soaLen) - elmdeg);
+          int isActive = 0;
+          if( soa < lastsoa ) {
+            isActive = 1;
           }
-          // if ptcl < remainder then set active
-          active.access(soa,ptcl) = 1;
+          if( soa == lastsoa && ptcl < lastSoaDeg ) {
+            isActive = 1;
+          }
+          printf("elm %3d deg %3d soa %3d lastsoa %3d lastSoaDeg %3d ptcl %3d active %1d\n",
+            elm, elmdeg, soa, lastsoa, lastSoaDeg, ptcl, isActive);
+          active.access(soa,ptcl) = isActive;
       }, "set_active");
     }
 
