@@ -24,10 +24,11 @@ class CabanaM
     using AoSoA_t = Cabana::AoSoA<typename CM_DT::type,MemorySpace>;
     using memspace = typename MemorySpace::memory_space;
     using exespace = typename MemorySpace::execution_space;
+    using hostspace = Kokkos::HostSpace;
 
   public:
     CabanaM()
-      : _numPtcls( 0 )
+      : _capacity( 0 )
       , _numElms( 0 )
       , _numSoa( 0 )
       , _vector_length( 0 )
@@ -36,54 +37,66 @@ class CabanaM
       , _aosoa( NULL )
     {}
 
-    CabanaM( const int *deg, const int elem_count )
-    {
-      _aosoa = new AoSoA_t();
-      //int vector_len = _aosoa->vector_length;
-      _vector_length = Impl::PerformanceTraits<
-             typename MemorySpace::execution_space>::vector_length;
-      _offsets = new int[elem_count+1]();
+    CabanaM( const int *deg, const int elem_count ) {
       _numElms = elem_count;
-      // elem at i owns SoA offsets[i+1] - offsets[i]
-      _offsets[0] = 0;
-      for ( int i=0; i<elem_count; ++i ) {
-        int SoA_count = (deg[i]/_vector_length) + 1;
-        _offsets[i+1] = SoA_count + _offsets[i];
-        printf("%3d soa_count %3d\n", i, SoA_count);
-      }
+      _vector_length = AoSoA_t::vector_length;
+      _offsets = buildOffset(deg,elem_count);
       _numSoa = _offsets[elem_count];
-      _numPtcls = _offsets[elem_count]*_vector_length;
-      _aosoa->resize(_numPtcls);
-      assert(_numSoa == _aosoa->numSoA());
-      _parentElm = new int[_numSoa];
-      for( int elm=0; elm<elem_count; elm++ )
-        for( int soa=_offsets[elm]; soa<_offsets[elm+1]; soa++)
-          _parentElm[soa]=elm;
-      setActive(deg);
+      _capacity = _numSoa*_vector_length;
+      _aosoa = makeAoSoA(_capacity,_numSoa);
+      _parentElm = getParentElms(_numElms,_numSoa,_offsets);
+      setActive(_aosoa, _numSoa, deg, _parentElm, _offsets);
     }
 
-    void setActive(const int* deg) {
-      Kokkos::View<int*,Kokkos::HostSpace> deg_h("degree_host",_numElms);
+    AoSoA_t* makeAoSoA(const int capacity, const int numSoa) {
+      auto aosoa = new AoSoA_t();
+      aosoa->resize(capacity);
+      assert(numSoa == aosoa->numSoA());
+      return aosoa;
+    }
+
+    int* buildOffset(const int* deg, const int elem_count) {
+      auto offset = new int[elem_count+1];
+      // elem at i owns SoA offsets[i+1] - offsets[i]
+      offset[0] = 0;
+      for ( int i=0; i<elem_count; ++i ) {
+        const auto SoA_count = (deg[i]/_vector_length) + 1;
+        offset[i+1] = SoA_count + offset[i];
+      }
+      return offset;
+    }
+
+    int* getParentElms(const int numElms,const int numSoa, const int* offsets) {
+      auto elms = new int[numSoa];
+      for( int elm=0; elm<numElms; elm++ )
+        for( int soa=offsets[elm]; soa<offsets[elm+1]; soa++)
+          elms[soa]=elm;
+      return elms;
+    }
+
+    void setActive(AoSoA_t* aosoa, const int numSoa, const int* deg, 
+        const int* parent, const int* offsets) {
+      Kokkos::View<int*,hostspace> deg_h("degree_host",_numElms);
       for (int i=0; i<_numElms; i++)
         deg_h(i) = deg[i];
       auto deg_d = Kokkos::create_mirror_view_and_copy(
           memspace(), deg_h);
 
-      Kokkos::View<int*,Kokkos::HostSpace> parent_h("parent_host",_numSoa);
-      for (int i=0; i<_numSoa; i++)
-        parent_h(i) = _parentElm[i];
+      Kokkos::View<int*,hostspace> parent_h("parent_host",numSoa);
+      for (int i=0; i<numSoa; i++)
+        parent_h(i) = parent[i];
       auto parent_d = Kokkos::create_mirror_view_and_copy(memspace(), parent_h);
 
-      Kokkos::View<int*,Kokkos::HostSpace> offset_h("offset_host",_numElms+1);
+      Kokkos::View<int*,hostspace> offset_h("offset_host",_numElms+1);
       for (int i=0; i<=_numElms; i++)
-        offset_h(i) = _offsets[i];
+        offset_h(i) = offsets[i];
       auto offset_d = Kokkos::create_mirror_view_and_copy(memspace(), offset_h);
 
       const auto soaLen = _vector_length;
       const auto cap = capacity();
-      const auto activeSliceIdx = _aosoa->number_of_members-1;
+      const auto activeSliceIdx = aosoa->number_of_members-1;
       printf("number of member types %d\n", activeSliceIdx+1);
-      auto active = slice<activeSliceIdx>(*_aosoa);
+      auto active = slice<activeSliceIdx>(*aosoa);
       Cabana::SimdPolicy<AoSoA_t::vector_length,exespace> simd_policy( 0, cap );
       Cabana::simd_parallel_for(simd_policy,
         KOKKOS_LAMBDA( const int soa, const int ptcl ) {
@@ -109,10 +122,7 @@ class CabanaM
     std::size_t numSoa() const { return _numSoa; }
 
     KOKKOS_FUNCTION
-    std::size_t numParticles() const { return _numPtcls; }
-
-    KOKKOS_FUNCTION
-    int capacity() const { return _vector_length * _aosoa->numSoA(); }
+    int capacity() const { return _capacity; };
 
     KOKKOS_FUNCTION
     std::size_t numElements() const { return _numElms; }
@@ -129,14 +139,16 @@ class CabanaM
     KOKKOS_FUNCTION
     AoSoA_t* aosoa() { return _aosoa; }
 
-   void rebuild() {
-      const int SIMD_WIDTH = 32; //FIXME
-      int sizesArray[_numElms];
+    void rebuild() {
+      const auto soaLen = AoSoA_t::vector_length;
       Kokkos::View<int*> elmDegree("elmDegree", _numElms);
       Kokkos::View<int*> elmOffsets("elmOffsets", _numElms);
       auto newParent = slice<0>(*aosoa());
-      auto active = slice<1>(*aosoa());
-      using ExecutionSpace = Kokkos::DefaultExecutionSpace;
+
+      const auto activeSliceIdx = _aosoa->number_of_members-1;
+      printf("number of member types %d\n", activeSliceIdx+1);
+      auto active = slice<activeSliceIdx>(*_aosoa);
+
       //first loop to count number of particles per new element (atomic)
       auto atomic = KOKKOS_LAMBDA(const int& soa,const int& tuple){
         if (active.access(soa,tuple) == 1){
@@ -144,7 +156,7 @@ class CabanaM
           Kokkos::atomic_increment<int>(&elmDegree(parent));
         }
       };
-      Cabana::SimdPolicy<SIMD_WIDTH,ExecutionSpace> simd_policy( 0, capacity() );
+      Cabana::SimdPolicy<soaLen,exespace> simd_policy( 0, capacity() );
       Cabana::simd_parallel_for( simd_policy, atomic, "atomic" );
 
       //print the number of particles per new element
@@ -152,29 +164,43 @@ class CabanaM
          printf("Degree of element %d = %d\n", i, elmDegree(i));
       });
 
-      //build the offsets array - is this necessary?
-      Kokkos::parallel_scan (_numElms, KOKKOS_LAMBDA (const int& i, int& upd, const bool &last) {
-          const int val_i = elmDegree(i);
-          if (last){
-            elmOffsets(i) = upd;
-          }
-          upd+= val_i;
-      });
+      auto elmDegree_h =
+        Kokkos::create_mirror_view_and_copy(hostspace(), elmDegree);
 
-      Kokkos::parallel_for(_numElms, KOKKOS_LAMBDA(const int i){
-        auto current_offset = elmOffsets(i);
-        printf("Offset of %d at position %d\n", current_offset, i);
-      });
-      Kokkos::View<int*>::HostMirror sizes2 = create_mirror_view(elmDegree);
-      for (int l = 0; l < _numElms; l++){
-         sizesArray[l] = sizes2(l); //current_size;//causes segfault for some reason (kokkos view error)
-      }
-    //start copy from b->a
-      CabanaM newCabanaM(sizesArray, _numElms);
-  }
+      //prepare a new aosoa to store the shuffled particles
+      auto newOffset = buildOffset(elmDegree_h.data(), _numElms);
+      const auto newNumSoa = newOffset[_numElms];
+      const auto newCapacity = newNumSoa*_vector_length;
+      auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
+      auto newParents = getParentElms(_numElms,newNumSoa,newOffset);
+
+      //assign the particles from the current aosoa to the newAosoa 
+      Kokkos::View<int*,hostspace> newOffset_h("newOffset_host",_numElms+1);
+      for (int i=0; i<=_numElms; i++)
+        newOffset_h(i) = newOffset[i];
+      auto newOffset_d = Kokkos::create_mirror_view_and_copy(memspace(), newOffset_h);
+
+      Kokkos::View<int*,memspace> elmPtclCounter_d("elmPtclCounter_device",_numElms);
+
+      auto copyPtcls = KOKKOS_LAMBDA(const int& soa,const int& tuple){
+        if (active.access(soa,tuple) == 1){
+          auto destParent = newParent.access(soa,tuple);
+          //Compute the destAoa based on the destParent and an array of
+          // counters for each destParent tracking which particle is the next
+          // free position. Use atomic fetch and incriment with the
+          // 'elmPtclCounter_d' array.
+          // INSERT CODE HERE
+        }
+      };
+      Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
+     
+      //destroy the old aosoa and use the new one in the CabanaM object
+      delete _aosoa;
+      _aosoa = newAosoa;
+    }
 
   private:
-    std::size_t _numPtcls;
+    std::size_t _capacity;
     std::size_t _numElms;
     std::size_t _numSoa;
     std::size_t _vector_length;
