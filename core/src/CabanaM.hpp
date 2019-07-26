@@ -79,18 +79,18 @@ class CabanaM
         offset_h(i) = _offsets[i];
       auto offset_d = Kokkos::create_mirror_view_and_copy(memspace(), offset_h);
 
+      const auto soaLen = _vector_length;
       const auto cap = capacity();
       const auto activeSliceIdx = _aosoa->number_of_members-1;
       printf("number of member types %d\n", activeSliceIdx+1);
       auto active = slice<activeSliceIdx>(*_aosoa);
-      Cabana::SimdPolicy<AoSoA_t::vector_length,Kokkos::Cuda> simd_policy( 0, cap );
+      Cabana::SimdPolicy<AoSoA_t::vector_length,exespace> simd_policy( 0, cap );
       Cabana::simd_parallel_for(simd_policy,
         KOKKOS_LAMBDA( const int soa, const int ptcl ) {
           const auto elm = parent_d(soa);
           const auto numsoa = offset_d(elm+1)-offset_d(elm);
           const auto lastsoa = offset_d(elm+1)-1;
           const auto elmdeg = deg_d(elm);
-          const auto soaLen = 32; //FIXME
           const auto lastSoaDeg = soaLen - ((numsoa * soaLen) - elmdeg);
           int isActive = 0;
           if( soa < lastsoa ) {
