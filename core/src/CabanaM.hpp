@@ -185,7 +185,7 @@ class CabanaM
       auto copyPtcls = KOKKOS_LAMBDA(const int& soa,const int& tuple){
         if (active.access(soa,tuple) == 1){
           auto destParent = newParent.access(soa,tuple);
-          //Compute the destAoa based on the destParent and an array of
+          //Compute the destSoa based on the destParent and an array of
           // counters for each destParent tracking which particle is the next
           // free position. Use atomic fetch and incriment with the
           // 'elmPtclCounter_d' array.
