@@ -158,11 +158,8 @@ class CabanaM
       Cabana::SimdPolicy<soaLen,exespace> simd_policy( 0, capacity() );
       Cabana::simd_parallel_for( simd_policy, atomic, "atomic" );
       //print the number of particles per new element
-   //   Kokkos::parallel_for(_numElms, KOKKOS_LAMBDA(const int i){
-     //    printf("Degree of element %d = %d\n", i, elmDegree_d(i));
-    //  });
 
-      auto elmDegree_h = Kokkos::create_mirror_view_and_copy(hostspace(), elmDegree_d); //change elmdegree to _d
+      auto elmDegree_h = Kokkos::create_mirror_view_and_copy(hostspace(), elmDegree_d);
       //prepare a new aosoa to store the shuffled particles
       auto newOffset = buildOffset(elmDegree_h.data(), _numElms);
       const auto newNumSoa = newOffset[_numElms];
