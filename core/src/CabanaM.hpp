@@ -144,29 +144,25 @@ class CabanaM
       Kokkos::View<int*> elmDegree("elmDegree", _numElms);
       Kokkos::View<int*> elmOffsets("elmOffsets", _numElms);
       auto newParent = slice<0>(*aosoa());
-
       const auto activeSliceIdx = _aosoa->number_of_members-1;
       printf("number of member types %d\n", activeSliceIdx+1);
       auto active = slice<activeSliceIdx>(*_aosoa);
-
+      auto elmDegree_d = Kokkos::create_mirror_view_and_copy(memspace(), elmDegree);
       //first loop to count number of particles per new element (atomic)
       auto atomic = KOKKOS_LAMBDA(const int& soa,const int& tuple){
-        if (active.access(soa,tuple) == 1){
+        if (active.access(soa,tuple) == 1){ 
           auto parent = newParent.access(soa,tuple);
-          Kokkos::atomic_increment<int>(&elmDegree(parent));
+          Kokkos::atomic_increment<int>(&elmDegree_d(parent));
         }
       };
       Cabana::SimdPolicy<soaLen,exespace> simd_policy( 0, capacity() );
       Cabana::simd_parallel_for( simd_policy, atomic, "atomic" );
-
       //print the number of particles per new element
-      Kokkos::parallel_for(_numElms, KOKKOS_LAMBDA(const int i){
-         printf("Degree of element %d = %d\n", i, elmDegree(i));
-      });
+   //   Kokkos::parallel_for(_numElms, KOKKOS_LAMBDA(const int i){
+     //    printf("Degree of element %d = %d\n", i, elmDegree_d(i));
+    //  });
 
-      auto elmDegree_h =
-        Kokkos::create_mirror_view_and_copy(hostspace(), elmDegree);
-
+      auto elmDegree_h = Kokkos::create_mirror_view_and_copy(hostspace(), elmDegree_d); //change elmdegree to _d
       //prepare a new aosoa to store the shuffled particles
       auto newOffset = buildOffset(elmDegree_h.data(), _numElms);
       const auto newNumSoa = newOffset[_numElms];
@@ -181,19 +177,22 @@ class CabanaM
       auto newOffset_d = Kokkos::create_mirror_view_and_copy(memspace(), newOffset_h);
 
       Kokkos::View<int*,memspace> elmPtclCounter_d("elmPtclCounter_device",_numElms);
-
+      auto newActive = slice<activeSliceIdx>(*newAosoa);
       auto copyPtcls = KOKKOS_LAMBDA(const int& soa,const int& tuple){
-        if (active.access(soa,tuple) == 1){
-          auto destParent = newParent.access(soa,tuple);
+        if (newActive.access(soa,tuple) == 1){
           //Compute the destSoa based on the destParent and an array of
           // counters for each destParent tracking which particle is the next
           // free position. Use atomic fetch and incriment with the
           // 'elmPtclCounter_d' array.
-          // INSERT CODE HERE
+          auto destParent = newParent.access(soa,tuple);
+          printf("yeah nah soa: %d tuple: %d\n", soa, tuple);
+          auto occupiedStructs = elmPtclCounter_d(destParent);
+          auto oldTuple = _aosoa->getTuple(soa * _vector_length + tuple);
+          newAosoa->setTuple(destParent *_vector_length + occupiedStructs, oldTuple);
+          Kokkos::atomic_increment<int>(&elmPtclCounter_d(soa));
         }
       };
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
-     
       //destroy the old aosoa and use the new one in the CabanaM object
       delete _aosoa;
       _aosoa = newAosoa;
