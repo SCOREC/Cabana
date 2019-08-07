@@ -146,7 +146,7 @@ class CabanaM
       auto newParent = slice<0>(*aosoa());
       const auto activeSliceIdx = _aosoa->number_of_members-1;
       printf("number of member types %d\n", activeSliceIdx+1);
-      auto active = slice<activeSliceIdx>(*_aosoa);
+      auto active = slice<activeSliceIdx>(*aosoa());
       //first loop to count number of particles per new element (atomic)
       auto atomic = KOKKOS_LAMBDA(const int& soa,const int& tuple){
         if (active.access(soa,tuple) == 1){
@@ -164,7 +164,6 @@ class CabanaM
       const auto newNumSoa = newOffset[_numElms];
       const auto newCapacity = newNumSoa*_vector_length;
       auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
-      auto newParents = getParentElms(_numElms,newNumSoa,newOffset);
 
       //assign the particles from the current aosoa to the newAosoa 
       Kokkos::View<int*,hostspace> newOffset_h("newOffset_host",_numElms+1);
@@ -172,25 +171,21 @@ class CabanaM
         newOffset_h(i) = newOffset[i];
       auto newOffset_d = Kokkos::create_mirror_view_and_copy(memspace(), newOffset_h);
 
-      Kokkos::View<int*,memspace> elmPtclCounter_d("elmPtclCounter_device",_numElms);
+      Kokkos::View<int*,memspace> elmPtclCounter_d("elmPtclCounter_device",_numElms, -1); //?? init to -1
       auto newActive = slice<activeSliceIdx>(*newAosoa);
       auto copyPtcls = KOKKOS_LAMBDA(const int& soa,const int& tuple){
-        if (newActive.access(soa,tuple) == 1){
+        if (active.access(soa,tuple) == 1){
           //Compute the destSoa based on the destParent and an array of
           // counters for each destParent tracking which particle is the next
           // free position. Use atomic fetch and incriment with the
           // 'elmPtclCounter_d' array.
           auto destParent = newParent.access(soa,tuple);
           printf("yeah nah soa: %d tuple: %d\n", soa, tuple);
-          auto occupiedStructs = elmPtclCounter_d(destParent);
-          //the following line assumes that the soa and tuple index for the new
-          // particle position is a valid entry in the old aosoa - i think the
-          // active check (line 178) needs to be on the old aosoa and then use the
-          // elmPtclCounter to track where the particles are being added to the
-          // new aosoa
+          auto occupiedStructs = Kokkos::atomic_fetch_and_increment<int>(&elmPtclCounter_d(soa));
           auto oldTuple = _aosoa->getTuple(soa * _vector_length + tuple);
-          newAosoa->setTuple(destParent *_vector_length + occupiedStructs, oldTuple);
-          Kokkos::atomic_increment<int>(&elmPtclCounter_d(soa));
+          // use newOffset_d to figure out which soa is the first for destParent
+          auto firstSoa = newOffset_d(destParent); //not tested
+          newAosoa->setTuple(firstSoa * _vector_length + occupiedStructs, oldTuple);
         }
       };
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
