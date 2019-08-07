@@ -147,19 +147,18 @@ class CabanaM
       const auto activeSliceIdx = _aosoa->number_of_members-1;
       printf("number of member types %d\n", activeSliceIdx+1);
       auto active = slice<activeSliceIdx>(*_aosoa);
-      auto elmDegree_d = Kokkos::create_mirror_view_and_copy(memspace(), elmDegree);
       //first loop to count number of particles per new element (atomic)
       auto atomic = KOKKOS_LAMBDA(const int& soa,const int& tuple){
-        if (active.access(soa,tuple) == 1){ 
+        if (active.access(soa,tuple) == 1){
           auto parent = newParent.access(soa,tuple);
-          Kokkos::atomic_increment<int>(&elmDegree_d(parent));
+          Kokkos::atomic_increment<int>(&elmDegree(parent));
         }
       };
       Cabana::SimdPolicy<soaLen,exespace> simd_policy( 0, capacity() );
       Cabana::simd_parallel_for( simd_policy, atomic, "atomic" );
       //print the number of particles per new element
 
-      auto elmDegree_h = Kokkos::create_mirror_view_and_copy(hostspace(), elmDegree_d);
+      auto elmDegree_h = Kokkos::create_mirror_view_and_copy(hostspace(), elmDegree);
       //prepare a new aosoa to store the shuffled particles
       auto newOffset = buildOffset(elmDegree_h.data(), _numElms);
       const auto newNumSoa = newOffset[_numElms];
@@ -184,6 +183,11 @@ class CabanaM
           auto destParent = newParent.access(soa,tuple);
           printf("yeah nah soa: %d tuple: %d\n", soa, tuple);
           auto occupiedStructs = elmPtclCounter_d(destParent);
+          //the following line assumes that the soa and tuple index for the new
+          // particle position is a valid entry in the old aosoa - i think the
+          // active check (line 178) needs to be on the old aosoa and then use the
+          // elmPtclCounter to track where the particles are being added to the
+          // new aosoa
           auto oldTuple = _aosoa->getTuple(soa * _vector_length + tuple);
           newAosoa->setTuple(destParent *_vector_length + occupiedStructs, oldTuple);
           Kokkos::atomic_increment<int>(&elmPtclCounter_d(soa));
