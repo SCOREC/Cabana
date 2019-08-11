@@ -170,8 +170,8 @@ class CabanaM
         newOffset_h(i) = newOffset[i];
       auto newOffset_d = Kokkos::create_mirror_view_and_copy(memspace(), newOffset_h);
       Kokkos::View<int*, hostspace> elmPtclCounter_h("elmPtclCounter_device",_numElms); 
-      for (int i = 0; i < _numElms; i++)
-        elmPtclCounter_h(i) = -1;
+      //for (int i = 0; i < _numElms; i++)
+       // elmPtclCounter_h(i) = -1;
       auto elmPtclCounter_d = Kokkos::create_mirror_view_and_copy(memspace(), elmPtclCounter_h);
       auto newActive = slice<activeSliceIdx>(*newAosoa);
       auto copyPtcls = KOKKOS_LAMBDA(const int& soa,const int& tuple){
@@ -181,15 +181,12 @@ class CabanaM
           // free position. Use atomic fetch and incriment with the
           // 'elmPtclCounter_d' array.
           auto destParent = newParent.access(soa,tuple);
-          auto firstSoa = newOffset_d(destParent); //not tested
-          auto occupiedSoas = Kokkos::atomic_fetch_add<int>(&elmPtclCounter_d(firstSoa), 1);
-          printf("TEST 0\n");
-          printf("_vector_length = %d\n", _vector_length);
-          auto oldTuple = _aosoa->getTuple(soa * _vector_length + tuple);
-          printf("TEST 1\n");
+          auto occupiedTuples = Kokkos::atomic_fetch_add<int>(&elmPtclCounter_d(destParent), 1);
+          auto oldTuple = _aosoa->getTuple(soa *_vector_length + tuple);
+          auto firstSoa = newOffset_d(destParent);
           // use newOffset_d to figure out which soa is the first for destParent
-          newAosoa->setTuple(firstSoa * _vector_length + elmPtclCounter_d(firstSoa) , oldTuple);
-          printf("active particle which was at soa %d and tuple %d has been moved to soa %d and tuple %d\n", soa, tuple, firstSoa, elmPtclCounter_d(firstSoa)); 
+          newAosoa->setTuple(firstSoa * _vector_length + occupiedTuples, oldTuple);
+          printf("active particle which was at soa %d and tuple %d has been moved to soa %d and tuple %d\n", soa, tuple, firstSoa, occupiedTuples); 
         }
       };
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
