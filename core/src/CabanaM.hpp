@@ -10,6 +10,7 @@
 #include <Cabana_Core.hpp>
 
 #include <Kokkos_Core.hpp>
+#include <cassert>
 
 namespace Cabana
 {
@@ -138,6 +139,9 @@ class CabanaM
 
     KOKKOS_FUNCTION
     AoSoA_t* aosoa() { return _aosoa; }
+
+    KOKKOS_FUNCTION
+    AoSoA_t& aosoaRef() { return *_aosoa; }
 
     void rebuild() {
       const auto soaLen = AoSoA_t::vector_length;

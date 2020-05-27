@@ -21,8 +21,8 @@ void testRebuild() {
   using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
   CabanaM_t cm(deg, deg_len);
 
-  auto new_parents = cm.aosoa()->slice<0>();
-  auto active = cm.aosoa()->slice<1>();
+  auto new_parents = Cabana::slice<0>(*(cm.aosoa()), "parents");
+  auto active = Cabana::slice<1>(cm.aosoaRef(), "active");
 
   auto capacity = cm.capacity(); 
   printf("capacity of aosoa %d\n", capacity);
@@ -58,8 +58,8 @@ void testBiggerRebuild(){
   CabanaM_t cm(deg, deg_len);
 
   const auto capacity = cm.capacity();
-  auto new_parents = cm.aosoa()->slice<0>();
-  auto new_actives = cm.aosoa()->slice<1>();
+  auto new_parents = Cabana::slice<0>(cm.aosoaRef(), "new_parents");
+  auto new_actives = Cabana::slice<1>(cm.aosoaRef(), "new_actives");
 
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> parent_policy(0, capacity);
   Cabana::simd_parallel_for(parent_policy, 
