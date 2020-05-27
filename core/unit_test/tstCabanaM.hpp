@@ -18,8 +18,6 @@
 
 #include <gtest/gtest.h>
 
-#include <stdio.h> // FIXME: remove after debugging
-
 namespace Test
 {
 //---------------------------------------------------------------------------//
@@ -57,8 +55,9 @@ void testCabanaM()
   int test_offsets[4] = {0, offset1, offset2, offset3};
   for (int i=0;i<4;++i) {
     EXPECT_EQ( cabanam.offset(i), test_offsets[i] );
+  }
 }
-/*
+
 void testData()
 {
   printf("\n====testData====\n");
@@ -102,13 +101,14 @@ void testData()
       printf("parentElm soa ptcl %4d %4d %4d\n", parent, soa, ptcl);
   }, "testprint");
 }
-*/
+
 //---------------------------------------------------------------------------//
 // RUN TESTS
 //---------------------------------------------------------------------------//
 TEST( TEST_CATEGORY, aosoa_test )
 {
-    testCabanaM();
+  testCabanaM();
+  testData();
 }
 
 //---------------------------------------------------------------------------//
