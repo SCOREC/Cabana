@@ -1,9 +1,9 @@
-## dev steps
+## Development Steps
 
-1. indexing interface
-2. particle movement between elements
-3. sorting
-4. cabana access functions
+1. [ ] indexing interface
+2. [ ] particle movement between elements
+3. [ ] sorting
+4. [ ] cabana access functions
 
 ### Indexing Interface
 
@@ -41,8 +41,7 @@ parallel_for(numElements) {
   numSoa = offsets[i+1] - offsets[i]
   //execute mesh element calculations
   parallel_for(numSoa) {
-    parallel_for(aosoa.
-arraySize(s)) { // particle arrays within elm
+    parallel_for(aosoa.arraySize(s)) { // particle arrays within elm
       //apply values from the element calculations to each particle
     }
   }
@@ -54,11 +53,11 @@ to support reassigning a given particle to a different element without
 rebuilding the full AOSOA.
 
 Tasks:
-- extend/derive the Cabana AOSOA to hold an offsets array, referring to it
-  below as the ElmAOSOA
-- define a mechanism to run a parallel loop over the elements (as done in the
+- [x] extend/derive the Cabana AOSOA to hold an offsets array, referring to it
+  below as the ElmAOSOA (note, we call the class CabanaM in the current code)
+- [x] define a mechanism to run a parallel loop over the elements (as done in the
   pseudo code above)
-- assume that all particles are active (i.e., no extra capacity)
+- [x] assume that all particles are active (i.e., no extra capacity)
 
 ### Particle Movement
 
@@ -95,8 +94,8 @@ Note, if the majority of particles are moving the cost will approach that of a
 full rebuild.
 
 Tasks:
-- extend the ElmAOSOA to hold a first free index
-- implement the permutation function - assume the user will provide a numParticles
+- [ ]  extend the ElmAOSOA to hold a first free index
+- [ ]  implement the permutation function - assume the user will provide a numParticles
   sized array to store each the id of each particles next parent element - could
   this be built-in?
 
@@ -129,12 +128,12 @@ A permutation function could support the reassignment such that a rebuild is not
 required.
 
 Tasks:
-- define a helper function that uses the permutation function to attempt to swap
+- [ ] define a rebuild function that creates a new ElmAOSOA with sufficient capacity
+  to hold values from an existing ElmAOSOA
+- [ ] define a helper function that uses the permutation function to attempt to swap
   an element with a lot of unused capacity with one that is out of space - this
   could be done periodically for the worst elements to delay/prevent a full
   rebuild
-- define a rebuild function that creates a new ElmAOSOA with sufficient capacity
-  to hold values from an existing ElmAOSOA
 
 ### Cabana Access Functions
 
@@ -144,6 +143,25 @@ possible.
 If I understand correctly, a `slice` is a Kokkos View with a defined stride.
 
 Tasks:
-- if possible, provide a `slice` from an ElmAOSOA that accounts for used and free
+- [ ] if possible, provide a `slice` from an ElmAOSOA that accounts for used and free
   particles/tuples
-- determine which other Cabana interface APIs should be supported by ElmAOSOA
+- [ ] determine which other Cabana interface APIs should be supported by ElmAOSOA
+
+## Code Organization
+
+The current work on rebuild is being done in the `cm_rebuild` branch.
+
+Added files (`git diff --stat origin/master | awk '{print $1}'`):
+
+- core/src/CabanaM.hpp - CabanaM class, location of the rebuild function
+- core/src/Cabana_MemberTypes.hpp - defines mechanism to append a member
+  type to a user specified list of types; the CabanaM class needs a 'hidden'
+  SOA of integers for the particle mask (defines which particles are in-use and
+  which are padding)
+- core/unit_test/CMakeLists.txt - build system
+- core/unit_test/[Cuda|Serial]/tstCabanaM_[Cuda|Serial].cpp - test support
+- core/unit_test/[Cuda|Serial]/tstRebuild_[Cuda|Serial].cpp - test support
+- core/unit_test/tstCabanaM.hpp - tests constructors
+- core/unit_test/tstRebuild.hpp - tests rebuild
+- devplan.md - this file
+
