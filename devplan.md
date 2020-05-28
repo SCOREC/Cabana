@@ -1,6 +1,6 @@
 ## Development Steps
 
-1. [ ] indexing interface
+1. [x] indexing interface
 2. [ ] particle movement between elements
 3. [ ] sorting
 4. [ ] cabana access functions
