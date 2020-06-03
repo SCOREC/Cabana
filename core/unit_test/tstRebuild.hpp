@@ -69,12 +69,6 @@ void testBiggerRebuild(){
       else if (tuple == 10 && soa == 2){
         new_parents.access(soa,tuple) = 0;
       }
-      else if (soa == 1){ 
-        new_parents.access(soa,tuple) = 1;
-      }
-      else if (soa == 2){
-        new_parents.access(soa,tuple) = 2;
-      }
       else {
         new_parents.access(soa, tuple) = soa;
       }   
