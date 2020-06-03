@@ -174,8 +174,6 @@ class CabanaM
         newOffset_h(i) = newOffset[i];
       auto newOffset_d = Kokkos::create_mirror_view_and_copy(memspace(), newOffset_h);
       Kokkos::View<int*, hostspace> elmPtclCounter_h("elmPtclCounter_device",_numElms); 
-      //for (int i = 0; i < _numElms; i++)
-       // elmPtclCounter_h(i) = -1;
       auto elmPtclCounter_d = Kokkos::create_mirror_view_and_copy(memspace(), elmPtclCounter_h);
       auto newActive = slice<activeSliceIdx>(*newAosoa);
       auto copyPtcls = KOKKOS_LAMBDA(const int& soa,const int& tuple){

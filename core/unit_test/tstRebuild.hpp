@@ -13,7 +13,7 @@ namespace Test
 //---------------------------------------------------------------------------//
 //// Test Rebuild
 void testRebuild() {
-  const int deg[2] = {4, 2};
+  const int deg[2] = {4, 2}; // elm0 soa [ 0 1 2 3 ] elm1 soa [ 4 5 ]
   const int deg_len = 2;
 
   using DataTypes = Cabana::MemberTypes<int>;
@@ -32,12 +32,11 @@ void testRebuild() {
     KOKKOS_LAMBDA( const int soa, const int tuple ) {
      if (tuple == 1 && soa == 0){
        new_parents.access(soa,tuple) = 1;
-     } else if (soa == 1){
-       new_parents.access(soa,tuple) = 1;
      } else {
-       new_parents.access(soa, tuple) = soa;
+       new_parents.access(soa,tuple) = soa;
      }
   }, "set_parent");
+  // after: elm0 soa [ 0 2 3 ] elm1 soa [ 1 4 5 ]
 
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy(0, capacity);
   Cabana::simd_parallel_for(simd_policy, 
