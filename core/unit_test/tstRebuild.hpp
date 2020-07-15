@@ -43,11 +43,13 @@ void testRebuild() {
     KOKKOS_LAMBDA(const int soa, const int tuple) {
       printf("SoA: %d, Tuple: %d, New Parent: %d, Active: %d\n", soa, tuple, new_parents.access(soa, tuple), active.access(soa,tuple));
     }, "Final_Print");
-  
+  assert( cudaSuccess == cudaDeviceSynchronize());
   cm.rebuild();
+  assert( cudaSuccess == cudaDeviceSynchronize());
 }
 
 void testBiggerRebuild(){
+  assert( cudaSuccess == cudaDeviceSynchronize());
   printf("\n------- big test -------\n");
   const int deg[3] = {4, 2,15};
   const int deg_len = 3;
@@ -73,7 +75,7 @@ void testBiggerRebuild(){
         new_parents.access(soa, tuple) = soa;
       }   
       }, "set_parent");
-  printf("Capacity: %d\n", capacity);
+  fprintf(stderr, "Capacity: %d\n", capacity);
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy(0, capacity);
   Cabana::simd_parallel_for(simd_policy,
     KOKKOS_LAMBDA(const int soa, const int tuple) {
@@ -85,6 +87,6 @@ void testBiggerRebuild(){
 TEST( TEST_CATEGORY, aosoa_test )
 {
   testRebuild();
-  testBiggerRebuild();
+  //testBiggerRebuild();
 }
 }

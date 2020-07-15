@@ -661,7 +661,7 @@ class Slice
                                   std::is_same<U, DataType>::value ),
                                 reference_type>::type
         access( const size_type s, const size_type a ) const
-    {
+    {printf("SCREAM (0.00011)\n");
         return _view( s, a );
     }
 

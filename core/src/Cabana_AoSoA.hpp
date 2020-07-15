@@ -455,7 +455,7 @@ class AoSoA
     */
     KOKKOS_INLINE_FUNCTION
     tuple_type getTuple( const size_type i ) const
-    {
+    {printf("0.003\n");
         tuple_type tpl;
         Impl::tupleCopy( tpl, 0, _data( index_type::s( i ) ),
                          index_type::a( i ) );
@@ -472,6 +472,7 @@ class AoSoA
     KOKKOS_INLINE_FUNCTION
     void setTuple( const size_type i, const tuple_type &tpl ) const
     {
+      printf("0.003\n");
         Impl::tupleCopy( _data( index_type::s( i ) ), index_type::a( i ), tpl,
                          0 );
     }

@@ -415,6 +415,7 @@ KOKKOS_INLINE_FUNCTION void soaElementCopy(
     const SoA<MemberTypes<Types...>, SrcVectorLength> &src,
     const std::size_t src_idx, std::integral_constant<std::size_t, M> )
 {
+    printf("0.005\n");
     soaElementMemberCopy<M>( dst, dst_idx, src, src_idx );
     soaElementCopy( dst, dst_idx, src, src_idx,
                     std::integral_constant<std::size_t, M - 1>() );
@@ -426,6 +427,7 @@ KOKKOS_INLINE_FUNCTION void soaElementCopy(
     const SoA<MemberTypes<Types...>, SrcVectorLength> &src,
     const std::size_t src_idx, std::integral_constant<std::size_t, 0> )
 {
+    printf("0.006\n");
     soaElementMemberCopy<0>( dst, dst_idx, src, src_idx );
 }
 
@@ -437,6 +439,7 @@ tupleCopy( SoA<MemberTypes<Types...>, DstVectorLength> &dst,
            const SoA<MemberTypes<Types...>, SrcVectorLength> &src,
            const std::size_t src_idx )
 {
+    printf("0.004\n");
     soaElementCopy(
         dst, dst_idx, src, src_idx,
         std::integral_constant<std::size_t, sizeof...( Types ) - 1>() );
