@@ -177,6 +177,7 @@ class CabanaM
       const auto newNumSoa = newOffset[_numElms];
       const auto newCapacity = newNumSoa*_vector_length;
       auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
+      printf("newCapacity: %d, newNumSoa: %d\n", newCapacity, newNumSoa);
       //assign the particles from the current aosoa to the newAosoa 
       Kokkos::View<int*,hostspace> newOffset_h("newOffset_host",_numElms+1);
       for (int i=0; i<=_numElms; i++)
@@ -188,41 +189,52 @@ class CabanaM
       auto newActive = slice<activeSliceIdx>(*newAosoa);
       assert( cudaSuccess == cudaDeviceSynchronize());
       setvbuf( stdout, NULL, _IONBF, 0 );
+      
       printf("_vector_length: %d\n", _vector_length);
       auto _vector_lengthTEST = _vector_length;
-      printf("_vector_lengthTEST: %d\n", _vector_lengthTEST);
+      auto aosoa_TEST = _aosoa;
+
       auto copyPtcls = KOKKOS_LAMBDA(const int& soa,const int& tuple){
         if (active.access(soa,tuple) == 1){
           //Compute the destSoa based on the destParent and an array of
           // counters for each destParent tracking which particle is the next
           // free position. Use atomic fetch and incriment with the
           // 'elmPtclCounter_d' array.
-          printf("soa: %d, tuple: %d\n", soa, tuple);
+
+          //Tuple<DataTypes> apple = Tuple<DataTypes>(oldTuple);
+          Tuple<Cabana::MemberTypes<int,int>> apple = Tuple<Cabana::MemberTypes<int,int>>();
+
+
+          //std::integral_constant<std::size_t, 10> orange = std::integral_constant<std::size_t, 10>();
+          //printf("%d\n",orange());
+
           // WHAT IS HAPPENING HERE
-          printf("tuple0: %d\n", tuple);
           //printf("soa: %d, _vector_length: %d, tuple: %d\n", soa, _vector_length, tuple);
           printf("soa: %d, _vector_lengthTEST: %d, tuple: %d\n", soa, _vector_lengthTEST, tuple);
-          printf("tuple1: %d\n", tuple);
           printf("0.0001\n");
           auto destParent = newParent.access(soa,tuple); // trying to access slice<0>(*aosoa())
           printf("0.0002\n");
-          auto occupiedTuples = Kokkos::atomic_fetch_add<int>(&elmPtclCounter_d(destParent), 1); // FAILS FOR THE LAST 2
+          auto occupiedTuples = Kokkos::atomic_fetch_add<int>(&elmPtclCounter_d(destParent), 1);
           printf("0.0003\n");
           printf("soa_c: %d, tuple_c: %d\n", soa, tuple);
-          printf("added stuff: %d\n", soa * _vector_lengthTEST + tuple);
+          printf("added stuff: %d\n", soa * _vector_lengthTEST + tuple); // correct
           //auto oldTuple = _aosoa->getTuple(soa * _vector_length + tuple);
-          auto oldTuple = _aosoa->getTuple(soa * _vector_lengthTEST + tuple);
+          auto oldTuple = aosoa_TEST->getTuple(soa * _vector_lengthTEST + tuple);
+          auto testTuple = oldTuple;
+          aosoa_TEST->setTuple(soa * _vector_lengthTEST + tuple, apple); // TEST
           printf("0.0004\n");
           auto firstSoa = newOffset_d(destParent);
           printf("0.0005\n");
           // use newOffset_d to figure out which soa is the first for destParent
           //newAosoa->setTuple(firstSoa * _vector_length + occupiedTuples, oldTuple);
-          newAosoa->setTuple(firstSoa * _vector_lengthTEST + occupiedTuples, oldTuple);
+          //newAosoa->setTuple(firstSoa * _vector_lengthTEST + occupiedTuples, oldTuple);
           printf("0.0006\n");
           printf("active particle which was at soa %d and tuple %d has been moved to soa %d and tuple %d\n", soa, tuple, firstSoa, occupiedTuples); 
         }
       };
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
+      //parallel_for("copyPtcls", Kokkos::MDRangePolicy< Kokkos::Rank<2> >( {0,0}, {newNumSoa, soaLen} ), copyPtcls);
+      
       assert( cudaSuccess == cudaDeviceSynchronize());
       cudaDeviceSynchronize();
       //destroy the old aosoa and use the new one in the CabanaM object
