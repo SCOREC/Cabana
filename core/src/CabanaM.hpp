@@ -189,6 +189,20 @@ class CabanaM
       auto newActive = slice<activeSliceIdx>(*newAosoa);
       assert( cudaSuccess == cudaDeviceSynchronize());
       setvbuf( stdout, NULL, _IONBF, 0 );
+
+
+      auto aosoaTest = new AoSoA_t();
+      aosoaTest->resize(32);
+      auto tupleTest = new Tuple<Cabana::MemberTypes<int,int>>();      
+      auto copyTest = KOKKOS_LAMBDA(const int& i) {
+        aosoaTest->setTuple(i, *tupleTest);
+      };
+      Kokkos::parallel_for("copyTest", Kokkos::RangePolicy<exespace>(0, 32), copyTest);
+      
+      Kokkos::fence();
+
+      assert( cudaSuccess == cudaDeviceSynchronize());
+
       
       printf("_vector_length: %d\n", _vector_length);
       auto _vector_lengthTEST = _vector_length;
@@ -202,7 +216,7 @@ class CabanaM
           // 'elmPtclCounter_d' array.
 
           //Tuple<DataTypes> apple = Tuple<DataTypes>(oldTuple);
-          Tuple<Cabana::MemberTypes<int,int>> apple = Tuple<Cabana::MemberTypes<int,int>>();
+          //Tuple<Cabana::MemberTypes<int,int>> apple = Tuple<Cabana::MemberTypes<int,int>>();
 
 
           //std::integral_constant<std::size_t, 10> orange = std::integral_constant<std::size_t, 10>();
@@ -221,19 +235,22 @@ class CabanaM
           //auto oldTuple = _aosoa->getTuple(soa * _vector_length + tuple);
           auto oldTuple = aosoa_TEST->getTuple(soa * _vector_lengthTEST + tuple);
           auto testTuple = oldTuple;
-          aosoa_TEST->setTuple(soa * _vector_lengthTEST + tuple, apple); // TEST
+          
+          //aosoa_TEST->setTuple(soa * _vector_lengthTEST + tuple, apple); // TEST
+
           printf("0.0004\n");
           auto firstSoa = newOffset_d(destParent);
           printf("0.0005\n");
           // use newOffset_d to figure out which soa is the first for destParent
           //newAosoa->setTuple(firstSoa * _vector_length + occupiedTuples, oldTuple);
-          //newAosoa->setTuple(firstSoa * _vector_lengthTEST + occupiedTuples, oldTuple);
+          newAosoa->setTuple(firstSoa * _vector_lengthTEST + occupiedTuples, oldTuple);
+
           printf("0.0006\n");
           printf("active particle which was at soa %d and tuple %d has been moved to soa %d and tuple %d\n", soa, tuple, firstSoa, occupiedTuples); 
         }
       };
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
-      //parallel_for("copyPtcls", Kokkos::MDRangePolicy< Kokkos::Rank<2> >( {0,0}, {newNumSoa, soaLen} ), copyPtcls);
+      //Kokkos::parallel_for("copyPtcls", Kokkos::MDRangePolicy< Kokkos::Rank<2> >( {0,0}, {newNumSoa, soaLen} ), copyPtcls);
       
       assert( cudaSuccess == cudaDeviceSynchronize());
       cudaDeviceSynchronize();
