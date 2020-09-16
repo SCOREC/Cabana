@@ -71,8 +71,8 @@ void testData()
   using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
   CabanaM_t cm( deg, deg_len );
 
-  auto slice_float = Cabana::slice<0>(cm.aosoaRef(), "floats");
-  auto slice_int = Cabana::slice<1>(cm.aosoaRef(), "ints");
+  auto slice_float = Cabana::slice<0>(cm.aosoa(), "floats");
+  auto slice_int = Cabana::slice<1>(cm.aosoa(), "ints");
 
   Kokkos::View<int*,Kokkos::HostSpace> offsets_h("offsets_host",deg_len+1);
   for (int i=0; i<=deg_len; i++) {
