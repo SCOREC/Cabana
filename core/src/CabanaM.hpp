@@ -63,6 +63,12 @@ class CabanaM
       assert(numSoa == aosoa->numSoA());
       return aosoa;
     }
+    AoSoA_t makeAoSoA_s(const int capacity, const int numSoa) {
+      auto aosoa = AoSoA_t();
+      aosoa.resize(capacity);
+      assert(numSoa == aosoa.numSoA());
+      return aosoa;
+    }
 
     int* buildOffset(const int* deg, const int elem_count) {
       auto offset = new int[elem_count+1];
@@ -176,7 +182,7 @@ class CabanaM
       auto newOffset = buildOffset(elmDegree_h.data(), _numElms);
       const auto newNumSoa = newOffset[_numElms];
       const auto newCapacity = newNumSoa*_vector_length;
-      auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
+      auto newAosoa = makeAoSoA_s(newCapacity, newNumSoa);
       printf("newCapacity: %d, newNumSoa: %d\n", newCapacity, newNumSoa);
       //assign the particles from the current aosoa to the newAosoa 
       Kokkos::View<int*,hostspace> newOffset_h("newOffset_host",_numElms+1);
@@ -186,16 +192,16 @@ class CabanaM
       auto newOffset_d = Kokkos::create_mirror_view_and_copy(memspace(), newOffset_h);
       Kokkos::View<int*, hostspace> elmPtclCounter_h("elmPtclCounter_device",_numElms); 
       auto elmPtclCounter_d = Kokkos::create_mirror_view_and_copy(memspace(), elmPtclCounter_h);
-      auto newActive = slice<activeSliceIdx>(*newAosoa);
+      auto newActive = slice<activeSliceIdx>(newAosoa);
       assert( cudaSuccess == cudaDeviceSynchronize());
       setvbuf( stdout, NULL, _IONBF, 0 );
 
 
-      auto aosoaTest = new AoSoA_t();
-      aosoaTest->resize(32);
-      auto tupleTest = new Tuple<Cabana::MemberTypes<int,int>>();      
+      auto aosoaTest = AoSoA_t();
+      aosoaTest.resize(32);
+      auto tupleTest = Tuple<Cabana::MemberTypes<int,int>>();      
       auto copyTest = KOKKOS_LAMBDA(const int& i) {
-        aosoaTest->setTuple(i, *tupleTest);
+        aosoaTest.setTuple(i, tupleTest);
       };
       Kokkos::parallel_for("copyTest", Kokkos::RangePolicy<exespace>(0, 32), copyTest);
       
@@ -206,7 +212,7 @@ class CabanaM
       
       printf("_vector_length: %d\n", _vector_length);
       auto _vector_lengthTEST = _vector_length;
-      auto aosoa_TEST = _aosoa;
+      auto aosoa_TEST = AoSoA_t();
 
       auto copyPtcls = KOKKOS_LAMBDA(const int& soa,const int& tuple){
         if (active.access(soa,tuple) == 1){
@@ -233,17 +239,14 @@ class CabanaM
           printf("soa_c: %d, tuple_c: %d\n", soa, tuple);
           printf("added stuff: %d\n", soa * _vector_lengthTEST + tuple); // correct
           //auto oldTuple = _aosoa->getTuple(soa * _vector_length + tuple);
-          auto oldTuple = aosoa_TEST->getTuple(soa * _vector_lengthTEST + tuple);
-          auto testTuple = oldTuple;
+          auto oldTuple = aosoa_TEST.getTuple(soa * _vector_lengthTEST + tuple);
           
-          //aosoa_TEST->setTuple(soa * _vector_lengthTEST + tuple, apple); // TEST
-
           printf("0.0004\n");
           auto firstSoa = newOffset_d(destParent);
           printf("0.0005\n");
           // use newOffset_d to figure out which soa is the first for destParent
           //newAosoa->setTuple(firstSoa * _vector_length + occupiedTuples, oldTuple);
-          newAosoa->setTuple(firstSoa * _vector_lengthTEST + occupiedTuples, oldTuple);
+          newAosoa.setTuple(firstSoa * _vector_lengthTEST + occupiedTuples, oldTuple);
 
           printf("0.0006\n");
           printf("active particle which was at soa %d and tuple %d has been moved to soa %d and tuple %d\n", soa, tuple, firstSoa, occupiedTuples); 
@@ -257,7 +260,7 @@ class CabanaM
       //destroy the old aosoa and use the new one in the CabanaM object
       delete _aosoa;
       assert( cudaSuccess == cudaDeviceSynchronize());
-      _aosoa = newAosoa;
+      _aosoa = &newAosoa;
       assert( cudaSuccess == cudaDeviceSynchronize());
     }
 
