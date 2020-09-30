@@ -140,6 +140,7 @@ class CabanaM
     AoSoA_t aosoa() { return _aosoa; }
 
     void rebuild() {
+      assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       const auto soaLen = AoSoA_t::vector_length;
       Kokkos::View<int*> elmDegree("elmDegree", _numElms);
       Kokkos::View<int*> elmOffsets("elmOffsets", _numElms);
@@ -156,6 +157,7 @@ class CabanaM
           Kokkos::atomic_increment<int>(&elmDegree_d(parent));
         }
       };
+      assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       Cabana::SimdPolicy<soaLen,exespace> simd_policy( 0, capacity() );
       Cabana::simd_parallel_for( simd_policy, atomic, "atomic" );
       auto elmDegree_h = Kokkos::create_mirror_view_and_copy(hostspace(), elmDegree_d);
@@ -172,6 +174,11 @@ class CabanaM
       Kokkos::View<int*, hostspace> elmPtclCounter_h("elmPtclCounter_device",_numElms); 
       auto elmPtclCounter_d = Kokkos::create_mirror_view_and_copy(memspace(), elmPtclCounter_h);
       auto newActive = slice<activeSliceIdx>(newAosoa);
+
+      auto vector_length_cp = _vector_length;
+      auto aosoa_cp = _aosoa;
+
+      assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       auto copyPtcls = KOKKOS_LAMBDA(const int& soa,const int& tuple){
         if (active.access(soa,tuple) == 1){
           //Compute the destSoa based on the destParent and an array of
@@ -180,14 +187,15 @@ class CabanaM
           // 'elmPtclCounter_d' array.
           auto destParent = newParent.access(soa,tuple);
           auto occupiedTuples = Kokkos::atomic_fetch_add<int>(&elmPtclCounter_d(destParent), 1);
-          auto oldTuple = _aosoa.getTuple(soa *_vector_length + tuple);
+          auto oldTuple = aosoa_cp.getTuple(soa * vector_length_cp + tuple);
           auto firstSoa = newOffset_d(destParent);
           // use newOffset_d to figure out which soa is the first for destParent
-          newAosoa.setTuple(firstSoa * _vector_length + occupiedTuples, oldTuple);
+          newAosoa.setTuple(firstSoa * vector_length_cp + occupiedTuples, oldTuple);
           printf("active particle which was at soa %d and tuple %d has been moved to soa %d and tuple %d\n", soa, tuple, firstSoa, occupiedTuples); 
         }
       };
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
+      assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       //destroy the old aosoa and use the new one in the CabanaM object
       _aosoa = newAosoa;
     }
