@@ -92,7 +92,7 @@ class CabanaM
         offset_h(i) = offsets[i];
       auto offset_d = Kokkos::create_mirror_view_and_copy(memspace(), offset_h);
 
-      const auto soaLen = _vector_length;
+      const int soaLen = _vector_length;
       const auto cap = capacity();
       const auto activeSliceIdx = aosoa.number_of_members-1;
       printf("number of member types %d\n", activeSliceIdx+1);
