@@ -139,12 +139,11 @@ class CabanaM
     KOKKOS_FUNCTION
     AoSoA_t aosoa() { return _aosoa; }
 
-    void rebuild() {
+    void rebuild(Kokkos::View<int*,MemorySpace> newParent) {
       assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       const auto soaLen = AoSoA_t::vector_length;
       Kokkos::View<int*> elmDegree("elmDegree", _numElms);
       Kokkos::View<int*> elmOffsets("elmOffsets", _numElms);
-      auto newParent = slice<0>(aosoa());
       const auto activeSliceIdx = _aosoa.number_of_members-1;
       printf("number of member types %d\n", activeSliceIdx+1);
       auto active = slice<activeSliceIdx>(aosoa());
@@ -153,7 +152,7 @@ class CabanaM
       //first loop to count number of particles per new element (atomic)
       auto atomic = KOKKOS_LAMBDA(const int& soa,const int& tuple){
         if (active.access(soa,tuple) == 1){
-          auto parent = newParent.access(soa,tuple);
+          auto parent = newParent((soa*32)+tuple);
           Kokkos::atomic_increment<int>(&elmDegree_d(parent));
         }
       };
@@ -185,7 +184,7 @@ class CabanaM
           // counters for each destParent tracking which particle is the next
           // free position. Use atomic fetch and incriment with the
           // 'elmPtclCounter_d' array.
-          auto destParent = newParent.access(soa,tuple);
+          auto destParent = newParent((soa*32)+tuple);
           auto occupiedTuples = Kokkos::atomic_fetch_add<int>(&elmPtclCounter_d(destParent), 1);
           auto oldTuple = aosoa_cp.getTuple(soa * vector_length_cp + tuple);
           auto firstSoa = newOffset_d(destParent);
