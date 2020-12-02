@@ -18,13 +18,14 @@ void testRebuild() {
   const int deg[2] = {4, 2}; // before: soa0 [ 0 1 2 3 ], soa1 [ 32 33 ]
   const int deg_len = 2;
 
-  using DataTypes = Cabana::MemberTypes<int>; // <newParent, id, active>
+  using DataTypes = Cabana::MemberTypes<int>; // <id, active>
   using AoSoA_t = Cabana::AoSoA<DataTypes,TEST_MEMSPACE>;
   using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
   CabanaM_t cm(deg, deg_len);
 
   const auto capacity = cm.capacity();
-  Kokkos::View<int*,TEST_MEMSPACE> new_parents("new_parents", 2*32);
+  const auto soaLen = capacity/deg_len;
+  Kokkos::View<int*,TEST_MEMSPACE> new_parents("new_parents", capacity);
   auto id = Cabana::slice<0>(cm.aosoa(), "id");
   auto active = Cabana::slice<1>(cm.aosoa(), "active");
 
@@ -38,9 +39,9 @@ void testRebuild() {
   Cabana::simd_parallel_for(parent_policy, 
     KOKKOS_LAMBDA( const int soa, const int tuple ) {
      if (tuple == 1 && soa == 0){
-       new_parents((soa*32)+tuple) = 1;
+       new_parents((soa*soaLen)+tuple) = 1;
      } else {
-       new_parents((soa*32)+tuple) = soa;
+       new_parents((soa*soaLen)+tuple) = soa;
      }
   }, "set_parent");
   printf("Capacity: %d\n", capacity);
@@ -48,13 +49,20 @@ void testRebuild() {
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy(0, capacity);
   Cabana::simd_parallel_for(simd_policy, 
     KOKKOS_LAMBDA(const int soa, const int tuple) {
-      printf("SoA: %d, Tuple: %d, New Parent: %d, id: %d, Active: %d\n", soa, tuple, new_parents((soa*32)+tuple), id.access(soa, tuple), active.access(soa,tuple));
+      printf("SoA: %d, Tuple: %d, New Parent: %d, id: %d, Active: %d\n", soa, tuple, new_parents((soa*soaLen)+tuple), id.access(soa, tuple), active.access(soa,tuple));
     }, "Final_Print");
   
   cm.rebuild(new_parents); // after: soa0 [ 0 2 3 ], soa1 [ 1 32 33 ]
 
-  // Check right particles are active
+  id = Cabana::slice<0>(cm.aosoa(), "id");
   active = Cabana::slice<1>(cm.aosoa(), "active");
+  printf("After rebuild:\n");
+  Cabana::simd_parallel_for(simd_policy, 
+    KOKKOS_LAMBDA(const int soa, const int tuple) {
+      printf("SoA: %d, Tuple: %d, id: %d, Active: %d\n", soa, tuple, id.access(soa, tuple), active.access(soa,tuple));
+    }, "After_Print");
+
+  // Check right particles are active
   // don't need to check soa since both same
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> active_policy(0, capacity);
   Cabana::simd_parallel_for(active_policy, 
@@ -70,31 +78,30 @@ void testRebuild() {
   // map with <id, soa> pairs
   std::unordered_map<int, int> id_parent_check;
   for (int i = 0; i < cm.aosoa().size(); i++ ) {
-    if ( (i == 1) && (i / 32 == 0)) {
+    if ( (i == 1) && (i / soaLen == 0)) {
       id_parent_check.insert( {i, 1} );
     }
     else {
-      id_parent_check.insert( {i, i / 32} );
+      id_parent_check.insert( {i, i / soaLen} );
     }
   }
 
   // Setup views
-  id = Cabana::slice<0>(cm.aosoa(), "id");
-  Kokkos::View<int*> parent_check("parent_check", 2*32);
+  Kokkos::View<int*> parent_check("parent_check", capacity);
   Kokkos::View<int*>::HostMirror host_parent_check = Kokkos::create_mirror_view(parent_check);
 
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> id_check_policy(0, capacity);
   Cabana::simd_parallel_for(id_check_policy, 
     KOKKOS_LAMBDA(const int soa, const int tuple) {
-      parent_check((soa*32)+tuple) = id.access(soa, tuple);
+      parent_check((soa*soaLen)+tuple) = id.access(soa, tuple);
   }, "check_id");
 
   Kokkos::deep_copy(host_parent_check, parent_check);
 
   for ( int soa = 0; soa <= 1; soa++ ) {
     for ( int tuple = 0; tuple <= 2; tuple++ ) { // <= 2 to ignore inactives
-      printf("curr_soa: %d, tuple: %d, id: %d, new_soa: %d\n", soa, tuple, host_parent_check((soa*32)+tuple), id_parent_check[ host_parent_check((soa*32)+tuple) ]);
-      assert( id_parent_check[ host_parent_check((soa*32)+tuple) ] == soa );
+      printf("curr_soa: %d, tuple: %d, id: %d, new_soa: %d\n", soa, tuple, host_parent_check((soa*soaLen)+tuple), id_parent_check[ host_parent_check((soa*soaLen)+tuple) ]);
+      assert( id_parent_check[ host_parent_check((soa*soaLen)+tuple) ] == soa );
     }
   }
 
@@ -104,13 +111,14 @@ void testBiggerRebuild(){
   printf("\n------- big test -------\n");
   const int deg[3] = {4,2,15}; // [0 1 2 3], [32 33], [64, 65, 66, ..., 78]
   const int deg_len = 3;
-  using DataTypes = Cabana::MemberTypes<int>;
+  using DataTypes = Cabana::MemberTypes<int>; // <id, active>
   using AoSoA_t = Cabana::AoSoA<DataTypes,TEST_MEMSPACE>;
   using CabanaM_t = Cabana::CabanaM<DataTypes,TEST_MEMSPACE>;
   CabanaM_t cm(deg, deg_len);
 
   const auto capacity = cm.capacity();
-  Kokkos::View<int*,TEST_MEMSPACE> new_parents("new_parents", 3*32);
+  const auto soaLen = capacity/deg_len;
+  Kokkos::View<int*,TEST_MEMSPACE> new_parents("new_parents", capacity);
   auto id = Cabana::slice<0>(cm.aosoa(), "id");
   auto active = Cabana::slice<1>(cm.aosoa(), "active");
   
@@ -124,13 +132,13 @@ void testBiggerRebuild(){
   Cabana::simd_parallel_for(parent_policy, 
     KOKKOS_LAMBDA( const int soa, const int tuple ) { 
       if (tuple == 1 && soa == 0){ 
-        new_parents((soa*32)+tuple) = 1;
+        new_parents((soa*soaLen)+tuple) = 1;
       }
       else if (tuple == 10 && soa == 2){
-        new_parents((soa*32)+tuple) = 0;
+        new_parents((soa*soaLen)+tuple) = 0;
       }
       else {
-        new_parents((soa*32)+tuple) = soa;
+        new_parents((soa*soaLen)+tuple) = soa;
       }   
       }, "set_parent");
   printf("Capacity: %d\n", capacity);
@@ -138,7 +146,7 @@ void testBiggerRebuild(){
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> simd_policy(0, capacity);
   Cabana::simd_parallel_for(simd_policy,
     KOKKOS_LAMBDA(const int soa, const int tuple) {
-      printf("SoA: %d, Tuple: %d, New Parent: %d, Active: %d\n", soa, tuple, new_parents((soa*32)+tuple), active.access(soa,tuple));
+      printf("SoA: %d, Tuple: %d, New Parent: %d, Active: %d\n", soa, tuple, new_parents((soa*soaLen)+tuple), active.access(soa,tuple));
     }, "Final_Print");
     
   cm.rebuild(new_parents); // [73 0 2 3], [1 32 33], [64, 65, 66, ..., 78]
@@ -179,34 +187,34 @@ void testBiggerRebuild(){
   // map with <id, soa> pairs
   std::unordered_map<int, int> id_parent_check;
   for (int i = 0; i < cm.aosoa().size(); i++ ) {
-    if ( (i == 1) && (i / 32 == 0)) {
+    if ( (i == 1) && (i / soaLen == 0)) {
       id_parent_check.insert( {i, 1} );
     }
-    else if ( (i == 2*32+10) && (i / 32 == 2)) {
+    else if ( (i == 2*soaLen+10) && (i / soaLen == 2)) {
       id_parent_check.insert( {i, 0} );
     }
     else {
-      id_parent_check.insert( {i, i / 32} );
+      id_parent_check.insert( {i, i / soaLen} );
     }
   }
   
   // Setup views
   id = Cabana::slice<0>(cm.aosoa(), "id");
-  Kokkos::View<int*> parent_check("parent_check", 3*32);
+  Kokkos::View<int*> parent_check("parent_check", capacity);
   Kokkos::View<int*>::HostMirror host_parent_check = Kokkos::create_mirror_view(parent_check);
 
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> id_check_policy(0, capacity);
   Cabana::simd_parallel_for(id_check_policy, 
     KOKKOS_LAMBDA(const int soa, const int tuple) {
-      parent_check((soa*32)+tuple) = id.access(soa, tuple);
+      parent_check((soa*soaLen)+tuple) = id.access(soa, tuple);
   }, "check_id");
 
   Kokkos::deep_copy(host_parent_check, parent_check);
 
   for ( int soa = 0; soa <= 2; soa++ ) {
     for ( int tuple = 0; (soa == 0 && tuple <= 3) || (soa == 1 && tuple <= 1) || (soa == 2 && tuple <= 13); tuple++ ) {
-      printf("curr_soa: %d, tuple: %d, id: %d, new_soa: %d\n", soa, tuple, host_parent_check((soa*32)+tuple), id_parent_check[ host_parent_check((soa*32)+tuple) ]);
-      assert( id_parent_check[ host_parent_check((soa*32)+tuple) ] == soa );
+      printf("curr_soa: %d, tuple: %d, id: %d, new_soa: %d\n", soa, tuple, host_parent_check((soa*soaLen)+tuple), id_parent_check[ host_parent_check((soa*soaLen)+tuple) ]);
+      assert( id_parent_check[ host_parent_check((soa*soaLen)+tuple) ] == soa );
     }
   }
 }

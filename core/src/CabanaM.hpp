@@ -142,6 +142,7 @@ class CabanaM
     void rebuild(Kokkos::View<int*,MemorySpace> newParent) {
       assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       const auto soaLen = AoSoA_t::vector_length;
+      printf("soaLen: %d\n", soaLen);
       Kokkos::View<int*> elmDegree("elmDegree", _numElms);
       Kokkos::View<int*> elmOffsets("elmOffsets", _numElms);
       const auto activeSliceIdx = _aosoa.number_of_members-1;
@@ -152,7 +153,7 @@ class CabanaM
       //first loop to count number of particles per new element (atomic)
       auto atomic = KOKKOS_LAMBDA(const int& soa,const int& tuple){
         if (active.access(soa,tuple) == 1){
-          auto parent = newParent((soa*32)+tuple);
+          auto parent = newParent((soa*soaLen)+tuple);
           Kokkos::atomic_increment<int>(&elmDegree_d(parent));
         }
       };
@@ -164,6 +165,9 @@ class CabanaM
       auto newOffset = buildOffset(elmDegree_h.data(), _numElms);
       const auto newNumSoa = newOffset[_numElms];
       const auto newCapacity = newNumSoa*_vector_length;
+
+      printf("newCapacity: %d, newNumSoa: %d\n", newCapacity, newNumSoa);
+      
       auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
       //assign the particles from the current aosoa to the newAosoa 
       Kokkos::View<int*,hostspace> newOffset_h("newOffset_host",_numElms+1);
@@ -174,7 +178,12 @@ class CabanaM
       auto elmPtclCounter_d = Kokkos::create_mirror_view_and_copy(memspace(), elmPtclCounter_h);
       auto newActive = slice<activeSliceIdx>(newAosoa);
 
-      auto vector_length_cp = _vector_length;
+      printf("ACTIVE <%d> IN REBUILD:\n", activeSliceIdx);
+      Cabana::simd_parallel_for(simd_policy, 
+      KOKKOS_LAMBDA(const int soa, const int tuple) {
+        printf("SoA: %d, Tuple: %d, Active: %d\n", soa, tuple, newActive.access(soa,tuple));
+      }, "After_Print");
+
       auto aosoa_cp = _aosoa;
 
       assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
@@ -184,12 +193,12 @@ class CabanaM
           // counters for each destParent tracking which particle is the next
           // free position. Use atomic fetch and incriment with the
           // 'elmPtclCounter_d' array.
-          auto destParent = newParent((soa*32)+tuple);
+          auto destParent = newParent(soa*soaLen + tuple);
           auto occupiedTuples = Kokkos::atomic_fetch_add<int>(&elmPtclCounter_d(destParent), 1);
-          auto oldTuple = aosoa_cp.getTuple(soa * vector_length_cp + tuple);
+          auto oldTuple = aosoa_cp.getTuple(soa*soaLen + tuple);
           auto firstSoa = newOffset_d(destParent);
           // use newOffset_d to figure out which soa is the first for destParent
-          newAosoa.setTuple(firstSoa * vector_length_cp + occupiedTuples, oldTuple);
+          newAosoa.setTuple(firstSoa*soaLen + occupiedTuples, oldTuple);
           printf("active particle which was at soa %d and tuple %d has been moved to soa %d and tuple %d\n", soa, tuple, firstSoa, occupiedTuples); 
         }
       };
