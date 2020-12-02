@@ -167,7 +167,7 @@ class CabanaM
       const auto newCapacity = newNumSoa*_vector_length;
 
       printf("newCapacity: %d, newNumSoa: %d\n", newCapacity, newNumSoa);
-      
+
       auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
       //assign the particles from the current aosoa to the newAosoa 
       Kokkos::View<int*,hostspace> newOffset_h("newOffset_host",_numElms+1);
@@ -177,12 +177,6 @@ class CabanaM
       Kokkos::View<int*, hostspace> elmPtclCounter_h("elmPtclCounter_device",_numElms); 
       auto elmPtclCounter_d = Kokkos::create_mirror_view_and_copy(memspace(), elmPtclCounter_h);
       auto newActive = slice<activeSliceIdx>(newAosoa);
-
-      printf("ACTIVE <%d> IN REBUILD:\n", activeSliceIdx);
-      Cabana::simd_parallel_for(simd_policy, 
-      KOKKOS_LAMBDA(const int soa, const int tuple) {
-        printf("SoA: %d, Tuple: %d, Active: %d\n", soa, tuple, newActive.access(soa,tuple));
-      }, "After_Print");
 
       auto aosoa_cp = _aosoa;
 
@@ -206,6 +200,7 @@ class CabanaM
       assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       //destroy the old aosoa and use the new one in the CabanaM object
       _aosoa = newAosoa;
+      setActive(_aosoa, _numSoa, elmDegree_h.data(), _parentElm, _offsets);
     }
 
   private:
