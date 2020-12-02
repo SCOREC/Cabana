@@ -51,16 +51,13 @@ void testRebuild() {
     KOKKOS_LAMBDA(const int soa, const int tuple) {
       printf("SoA: %d, Tuple: %d, New Parent: %d, id: %d, Active: %d\n", soa, tuple, new_parents((soa*soaLen)+tuple), id.access(soa, tuple), active.access(soa,tuple));
     }, "Final_Print");
+
+  
   
   cm.rebuild(new_parents); // after: soa0 [ 0 2 3 ], soa1 [ 1 32 33 ]
 
   id = Cabana::slice<0>(cm.aosoa(), "id");
   active = Cabana::slice<1>(cm.aosoa(), "active");
-  printf("After rebuild:\n");
-  Cabana::simd_parallel_for(simd_policy, 
-    KOKKOS_LAMBDA(const int soa, const int tuple) {
-      printf("SoA: %d, Tuple: %d, id: %d, Active: %d\n", soa, tuple, id.access(soa, tuple), active.access(soa,tuple));
-    }, "After_Print");
 
   // Check right particles are active
   // don't need to check soa since both same
@@ -73,7 +70,7 @@ void testRebuild() {
        assert( active.access(soa,tuple) == 0 );
      }
   }, "check_active");
-
+  
   // Check right particles in right place
   // map with <id, soa> pairs
   std::unordered_map<int, int> id_parent_check;
@@ -87,15 +84,15 @@ void testRebuild() {
   }
 
   // Setup views
-  Kokkos::View<int*> parent_check("parent_check", capacity);
-  Kokkos::View<int*>::HostMirror host_parent_check = Kokkos::create_mirror_view(parent_check);
+  Kokkos::View<int*,TEST_MEMSPACE> parent_check("parent_check", capacity);
+  Kokkos::View<int*,TEST_MEMSPACE>::HostMirror host_parent_check = Kokkos::create_mirror(parent_check);
 
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> id_check_policy(0, capacity);
   Cabana::simd_parallel_for(id_check_policy, 
     KOKKOS_LAMBDA(const int soa, const int tuple) {
       parent_check((soa*soaLen)+tuple) = id.access(soa, tuple);
   }, "check_id");
-
+  
   Kokkos::deep_copy(host_parent_check, parent_check);
 
   for ( int soa = 0; soa <= 1; soa++ ) {
@@ -200,8 +197,8 @@ void testBiggerRebuild(){
   
   // Setup views
   id = Cabana::slice<0>(cm.aosoa(), "id");
-  Kokkos::View<int*> parent_check("parent_check", capacity);
-  Kokkos::View<int*>::HostMirror host_parent_check = Kokkos::create_mirror_view(parent_check);
+  Kokkos::View<int*,TEST_MEMSPACE> parent_check("parent_check", capacity);
+  Kokkos::View<int*,TEST_MEMSPACE>::HostMirror host_parent_check = Kokkos::create_mirror(parent_check);
 
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> id_check_policy(0, capacity);
   Cabana::simd_parallel_for(id_check_policy, 
@@ -222,6 +219,6 @@ void testBiggerRebuild(){
 TEST( TEST_CATEGORY, aosoa_test )
 {
   testRebuild();
-  testBiggerRebuild();
+  //testBiggerRebuild();
 }
 }

@@ -140,7 +140,7 @@ class CabanaM
     AoSoA_t aosoa() { return _aosoa; }
 
     void rebuild(Kokkos::View<int*,MemorySpace> newParent) {
-      assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
+      //assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       const auto soaLen = AoSoA_t::vector_length;
       printf("soaLen: %d\n", soaLen);
       Kokkos::View<int*> elmDegree("elmDegree", _numElms);
@@ -157,7 +157,7 @@ class CabanaM
           Kokkos::atomic_increment<int>(&elmDegree_d(parent));
         }
       };
-      assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
+      //assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       Cabana::SimdPolicy<soaLen,exespace> simd_policy( 0, capacity() );
       Cabana::simd_parallel_for( simd_policy, atomic, "atomic" );
       auto elmDegree_h = Kokkos::create_mirror_view_and_copy(hostspace(), elmDegree_d);
@@ -180,7 +180,7 @@ class CabanaM
 
       auto aosoa_cp = _aosoa;
 
-      assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
+      //assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       auto copyPtcls = KOKKOS_LAMBDA(const int& soa,const int& tuple){
         if (active.access(soa,tuple) == 1){
           //Compute the destSoa based on the destParent and an array of
@@ -197,7 +197,7 @@ class CabanaM
         }
       };
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
-      assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
+      //assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       //destroy the old aosoa and use the new one in the CabanaM object
       _aosoa = newAosoa;
       setActive(_aosoa, _numSoa, elmDegree_h.data(), _parentElm, _offsets);
