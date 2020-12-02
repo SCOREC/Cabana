@@ -219,6 +219,6 @@ void testBiggerRebuild(){
 TEST( TEST_CATEGORY, aosoa_test )
 {
   testRebuild();
-  //testBiggerRebuild();
+  testBiggerRebuild();
 }
 }
