@@ -54,6 +54,57 @@ Fully rebuild the AoSoA with these new parent SoAs by copying into a new AoSoA a
 
 
 ## Build Instructions
-* Do Thing
-* Do Thing
-* Do Another Thing
+* Create the working directory:
+```
+mkdir -p ~/develop/cabanam_kokkos3200
+```
+
+* Dependency Stuff (Is this stuff specific to Blockade?? How do I expand it out??????)
+
+* Place the following commands into a script `~/develop/cabanam_kokkos3200/buildAll.sh`:
+``` 
+source ~/develop/cabanam_kokkos3200/envBlockade.sh
+
+cd $root
+git clone git@github.com:kokkos/kokkos.git
+cd kokkos
+git checkout 3.2.00
+cd -
+mkdir $kk #set in the environment script
+cd $_
+cmake ../kokkos \
+  -DCMAKE_CXX_COMPILER=$root/kokkos/bin/nvcc_wrapper \
+  -DKokkos_ARCH_TURING75=ON \
+  -DKokkos_ENABLE_SERIAL=ON \
+  -DKokkos_ENABLE_OPENMP=off \
+  -DKokkos_ENABLE_CUDA=on \
+  -DKokkos_ENABLE_CUDA_LAMBDA=on \
+  -DKokkos_ENABLE_DEBUG=on \
+  -DKokkos_ENABLE_PROFILING=on \
+  -DCMAKE_INSTALL_PREFIX=$PWD/install
+make -j 24 install
+
+cd $root
+git clone git@github.com:SCOREC/Cabana.git cabana
+cd cabana
+git checkout cm_rebuild
+cd -
+```
+
+* Make the script executable:
+``` chmod +x ~/develop/cabanam_kokkos3200/buildAll.sh ```
+
+* Run the script:
+```
+cd ~/develop/cabanam_kokkos3200/
+./buildAll.sh
+```
+
+* Assuming the `buildAll.sh` script has been successfully run before, the following commands will allow you to rebuild Cabana after making some changes to the source:
+```
+cd ~/develop/cabanam_kokkos3200/
+source envBlockade.sh
+cd build-cabana-blockade-cuda
+make
+```
+Note, `source envBlockade.sh` only needs to be run once for each terminal/session to setup the environment.
