@@ -48,14 +48,14 @@ class CabanaM
       setActive(_aosoa, _numSoa, deg, _parentElm, _offsets);
     }
 
-    AoSoA_t makeAoSoA(const int capacity, const int numSoa) {
+    AoSoA_t makeAoSoA( const int capacity, const int numSoa ) {
       auto aosoa = AoSoA_t();
       aosoa.resize(capacity);
       assert(numSoa == aosoa.numSoA());
       return aosoa;
     }
 
-    int* buildOffset(const int* deg, const int elem_count) {
+    int* buildOffset( const int* deg, const int elem_count ) {
       auto offset = new int[elem_count+1];
       // elem at i owns SoA offsets[i+1] - offsets[i]
       offset[0] = 0;
@@ -66,7 +66,7 @@ class CabanaM
       return offset;
     }
 
-    int* getParentElms(const int numElms,const int numSoa, const int* offsets) {
+    int* getParentElms( const int numElms, const int numSoa, const int* offsets ) {
       auto elms = new int[numSoa];
       for( int elm=0; elm<numElms; elm++ )
         for( int soa=offsets[elm]; soa<offsets[elm+1]; soa++)
@@ -74,8 +74,8 @@ class CabanaM
       return elms;
     }
 
-    void setActive(AoSoA_t &aosoa, const int numSoa, const int* deg, 
-        const int* parent, const int* offsets) {
+    void setActive( AoSoA_t &aosoa, const int numSoa, const int* deg, 
+        const int* parent, const int* offsets ) {
       Kokkos::View<int*,hostspace> deg_h("degree_host",_numElms);
       for (int i=0; i<_numElms; i++)
         deg_h(i) = deg[i];
@@ -140,7 +140,7 @@ class CabanaM
     AoSoA_t aosoa() { return _aosoa; }
 
     // Note: Use "assert( cudaSuccess == cudaDeviceSynchronize() );" to check for GPU issues
-    void rebuild(Kokkos::View<int*,MemorySpace> newParent) {
+    void rebuild( Kokkos::View<int*,MemorySpace> newParent ) {
       const auto soaLen = AoSoA_t::vector_length;
       Kokkos::View<int*> elmDegree("elmDegree", _numElms);
       Kokkos::View<int*> elmOffsets("elmOffsets", _numElms);
