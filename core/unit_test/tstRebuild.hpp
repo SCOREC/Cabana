@@ -15,6 +15,7 @@ namespace Test
 //---------------------------------------------------------------------------//
 //// Test Rebuild
 void testRebuild() {
+  // SETUP
   const int deg[2] = {4, 2}; // before: soa0 [ 0 1 2 3 ], soa1 [ 32 33 ]
   const int deg_len = 2;
 
@@ -28,13 +29,13 @@ void testRebuild() {
   Kokkos::View<int*,TEST_MEMSPACE> new_parents("new_parents", capacity);
   auto id = Cabana::slice<0>(cm.aosoa(), "id");
   auto active = Cabana::slice<1>(cm.aosoa(), "active");
-
+  // set particle ids to represent initial position
   Kokkos::RangePolicy<TEST_EXECSPACE> id_policy( 0, cm.aosoa().size() );
   Kokkos::parallel_for( id_policy,
     KOKKOS_LAMBDA( const int i ) {
       id(i) = i;
   }, "set_id");
-
+  // set new parent soas for rebuild
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> parent_policy(0, capacity);
   Cabana::simd_parallel_for(parent_policy, 
     KOKKOS_LAMBDA( const int soa, const int tuple ) {
@@ -51,29 +52,25 @@ void testRebuild() {
     KOKKOS_LAMBDA(const int soa, const int tuple) {
       printf("SoA: %d, Tuple: %d, New Parent: %d, id: %d, Active: %d\n", soa, tuple, new_parents((soa*soaLen)+tuple), id.access(soa, tuple), active.access(soa,tuple));
     }, "Final_Print");
-
-  
   
   cm.rebuild(new_parents); // after: soa0 [ 0 2 3 ], soa1 [ 1 32 33 ]
 
   id = Cabana::slice<0>(cm.aosoa(), "id");
   active = Cabana::slice<1>(cm.aosoa(), "active");
 
-  // Check right particles are active
-  // don't need to check soa since both same
+  // Active Check (check right particles are active)
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> active_policy(0, capacity);
   Cabana::simd_parallel_for(active_policy, 
     KOKKOS_LAMBDA( const int soa, const int tuple ) {
-     if (tuple <= 2) {
+     if (tuple <= 2) { // don't need to check soa since structure is the same for both
        assert( active.access(soa,tuple) == 1 );
      } else if (tuple > 2) {
        assert( active.access(soa,tuple) == 0 );
      }
   }, "check_active");
   
-  // Check right particles in right place
-  // map with <id, soa> pairs
-  std::unordered_map<int, int> id_parent_check;
+  // Particle Position Check (check right particles in right place)
+  std::unordered_map<int, int> id_parent_check; // test map with <id, soa> pairs
   for (int i = 0; i < cm.aosoa().size(); i++ ) {
     if ( (i == 1) && (i / soaLen == 0)) {
       id_parent_check.insert( {i, 1} );
@@ -82,19 +79,16 @@ void testRebuild() {
       id_parent_check.insert( {i, i / soaLen} );
     }
   }
-
   // Setup views
   Kokkos::View<int*,TEST_MEMSPACE> parent_check("parent_check", capacity);
   Kokkos::View<int*,TEST_MEMSPACE>::HostMirror host_parent_check = Kokkos::create_mirror(parent_check);
-
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> id_check_policy(0, capacity);
   Cabana::simd_parallel_for(id_check_policy, 
     KOKKOS_LAMBDA(const int soa, const int tuple) {
       parent_check((soa*soaLen)+tuple) = id.access(soa, tuple);
   }, "check_id");
-  
   Kokkos::deep_copy(host_parent_check, parent_check);
-
+  // Actual check
   for ( int soa = 0; soa <= 1; soa++ ) {
     for ( int tuple = 0; tuple <= 2; tuple++ ) { // <= 2 to ignore inactives
       printf("curr_soa: %d, tuple: %d, id: %d, new_soa: %d\n", soa, tuple, host_parent_check((soa*soaLen)+tuple), id_parent_check[ host_parent_check((soa*soaLen)+tuple) ]);
@@ -106,7 +100,8 @@ void testRebuild() {
 
 void testBiggerRebuild(){
   printf("\n------- big test -------\n");
-  const int deg[3] = {4,2,15}; // [0 1 2 3], [32 33], [64, 65, 66, ..., 78]
+  // SETUP
+  const int deg[3] = {4,2,15}; // before: soa0 [0 1 2 3], soa1 [32 33], soa2 [64, 65, 66, ..., 78]
   const int deg_len = 3;
   using DataTypes = Cabana::MemberTypes<int>; // <id, active>
   using AoSoA_t = Cabana::AoSoA<DataTypes,TEST_MEMSPACE>;
@@ -118,13 +113,13 @@ void testBiggerRebuild(){
   Kokkos::View<int*,TEST_MEMSPACE> new_parents("new_parents", capacity);
   auto id = Cabana::slice<0>(cm.aosoa(), "id");
   auto active = Cabana::slice<1>(cm.aosoa(), "active");
-  
+  // set particle ids to represent initial position
   Kokkos::RangePolicy<TEST_EXECSPACE> id_policy( 0, cm.aosoa().size() );
   Kokkos::parallel_for( id_policy,
     KOKKOS_LAMBDA( const int i ) {
       id(i) = i;
   }, "set_id");
-
+  // set new parent soas for rebuild
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> parent_policy(0, capacity);
   Cabana::simd_parallel_for(parent_policy, 
     KOKKOS_LAMBDA( const int soa, const int tuple ) { 
@@ -146,11 +141,12 @@ void testBiggerRebuild(){
       printf("SoA: %d, Tuple: %d, New Parent: %d, Active: %d\n", soa, tuple, new_parents((soa*soaLen)+tuple), active.access(soa,tuple));
     }, "Final_Print");
     
-  cm.rebuild(new_parents); // [73 0 2 3], [1 32 33], [64, 65, 66, ..., 78]
+  cm.rebuild(new_parents); // after: soa0 [73 0 2 3], soa1 [1 32 33], soa2 [64, 65, 66, ..., 78]
 
-  // Check right particles are active
+  id = Cabana::slice<0>(cm.aosoa(), "id");
   active = Cabana::slice<1>(cm.aosoa(), "active");
-  // don't need to check soa since both same
+
+  // Active Check (check right particles are active)
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> active_policy(0, capacity);
   Cabana::simd_parallel_for(active_policy, 
     KOKKOS_LAMBDA( const int soa, const int tuple ) {
@@ -180,9 +176,8 @@ void testBiggerRebuild(){
      }
   }, "check_active");
 
-  // Check right particles in right place
-  // map with <id, soa> pairs
-  std::unordered_map<int, int> id_parent_check;
+  // Particle Position Check (check right particles in right place)
+  std::unordered_map<int, int> id_parent_check; // test map with <id, soa> pairs
   for (int i = 0; i < cm.aosoa().size(); i++ ) {
     if ( (i == 1) && (i / soaLen == 0)) {
       id_parent_check.insert( {i, 1} );
@@ -194,30 +189,26 @@ void testBiggerRebuild(){
       id_parent_check.insert( {i, i / soaLen} );
     }
   }
-  
   // Setup views
-  id = Cabana::slice<0>(cm.aosoa(), "id");
   Kokkos::View<int*,TEST_MEMSPACE> parent_check("parent_check", capacity);
   Kokkos::View<int*,TEST_MEMSPACE>::HostMirror host_parent_check = Kokkos::create_mirror(parent_check);
-
   Cabana::SimdPolicy<AoSoA_t::vector_length,TEST_EXECSPACE> id_check_policy(0, capacity);
   Cabana::simd_parallel_for(id_check_policy, 
     KOKKOS_LAMBDA(const int soa, const int tuple) {
       parent_check((soa*soaLen)+tuple) = id.access(soa, tuple);
   }, "check_id");
-
   Kokkos::deep_copy(host_parent_check, parent_check);
-
+  // Actual check
   for ( int soa = 0; soa <= 2; soa++ ) {
     for ( int tuple = 0; (soa == 0 && tuple <= 3) || (soa == 1 && tuple <= 1) || (soa == 2 && tuple <= 13); tuple++ ) {
-      printf("curr_soa: %d, tuple: %d, id: %d, new_soa: %d\n", soa, tuple, host_parent_check((soa*soaLen)+tuple), id_parent_check[ host_parent_check((soa*soaLen)+tuple) ]);
+      printf("curr_soa: %d, tuple: %d, id: %d, new_soa: %d\n", soa, tuple,
+        host_parent_check((soa*soaLen)+tuple), id_parent_check[ host_parent_check((soa*soaLen)+tuple) ]);
       assert( id_parent_check[ host_parent_check((soa*soaLen)+tuple) ] == soa );
     }
   }
 }
 
-TEST( TEST_CATEGORY, aosoa_test )
-{
+TEST( TEST_CATEGORY, aosoa_test ) {
   testRebuild();
   testBiggerRebuild();
 }

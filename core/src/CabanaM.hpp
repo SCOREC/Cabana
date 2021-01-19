@@ -139,17 +139,15 @@ class CabanaM
     KOKKOS_FUNCTION
     AoSoA_t aosoa() { return _aosoa; }
 
+    // Note: Use "assert( cudaSuccess == cudaDeviceSynchronize() );" to check for GPU issues
     void rebuild(Kokkos::View<int*,MemorySpace> newParent) {
-      //assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       const auto soaLen = AoSoA_t::vector_length;
-      printf("soaLen: %d\n", soaLen);
       Kokkos::View<int*> elmDegree("elmDegree", _numElms);
       Kokkos::View<int*> elmOffsets("elmOffsets", _numElms);
       const auto activeSliceIdx = _aosoa.number_of_members-1;
       printf("number of member types %d\n", activeSliceIdx+1);
       auto active = slice<activeSliceIdx>(aosoa());
       auto elmDegree_d = Kokkos::create_mirror_view_and_copy(memspace(), elmDegree);
-
       //first loop to count number of particles per new element (atomic)
       auto atomic = KOKKOS_LAMBDA(const int& soa,const int& tuple){
         if (active.access(soa,tuple) == 1){
@@ -157,17 +155,14 @@ class CabanaM
           Kokkos::atomic_increment<int>(&elmDegree_d(parent));
         }
       };
-      //assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       Cabana::SimdPolicy<soaLen,exespace> simd_policy( 0, capacity() );
       Cabana::simd_parallel_for( simd_policy, atomic, "atomic" );
       auto elmDegree_h = Kokkos::create_mirror_view_and_copy(hostspace(), elmDegree_d);
+      
       //prepare a new aosoa to store the shuffled particles
       auto newOffset = buildOffset(elmDegree_h.data(), _numElms);
       const auto newNumSoa = newOffset[_numElms];
       const auto newCapacity = newNumSoa*_vector_length;
-
-      printf("newCapacity: %d, newNumSoa: %d\n", newCapacity, newNumSoa);
-
       auto newAosoa = makeAoSoA(newCapacity, newNumSoa);
       //assign the particles from the current aosoa to the newAosoa 
       Kokkos::View<int*,hostspace> newOffset_h("newOffset_host",_numElms+1);
@@ -177,10 +172,7 @@ class CabanaM
       Kokkos::View<int*, hostspace> elmPtclCounter_h("elmPtclCounter_device",_numElms); 
       auto elmPtclCounter_d = Kokkos::create_mirror_view_and_copy(memspace(), elmPtclCounter_h);
       auto newActive = slice<activeSliceIdx>(newAosoa);
-
-      auto aosoa_cp = _aosoa;
-
-      //assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
+      auto aosoa_cp = _aosoa; // copy of member variable _aosoa (Kokkos doesn't like member variables)
       auto copyPtcls = KOKKOS_LAMBDA(const int& soa,const int& tuple){
         if (active.access(soa,tuple) == 1){
           //Compute the destSoa based on the destParent and an array of
@@ -197,7 +189,6 @@ class CabanaM
         }
       };
       Cabana::simd_parallel_for(simd_policy, copyPtcls, "copyPtcls");
-      //assert( cudaSuccess == cudaDeviceSynchronize() ); // CHECK
       //destroy the old aosoa and use the new one in the CabanaM object
       _aosoa = newAosoa;
       setActive(_aosoa, _numSoa, elmDegree_h.data(), _parentElm, _offsets);
