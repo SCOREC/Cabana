@@ -58,7 +58,7 @@ class CabanaM
      * @param[in] capacity maximum capacity (number of particles) of the AoSoA to be created
      * @param[in] numSoa total number of SoAs (can be greater than elem_count if
      * any element of deg is _vector_length)
-     * @param[out] aosoa 
+     * @return AoSoA of max capacity, capacity, and total number of SoAs, numSoa
     */
     AoSoA_t makeAoSoA( const int capacity, const int numSoa ) {
       auto aosoa = AoSoA_t();
@@ -71,7 +71,7 @@ class CabanaM
      * Builds the offset array for the CSR
      * @param[in] deg pointer to an array of ints, representing the number of active elements in each SoA
      * @param[in] elem_count length of deg
-     * @param[out] offset
+     * @return offset array (each element is the first index of each SoA block)
     */
     int* buildOffset( const int* deg, const int elem_count ) {
       auto offset = new int[elem_count+1];
@@ -85,13 +85,12 @@ class CabanaM
     }
 
     /**
-     * Builds the parent array for tracking particle position,
-     * where each element is an int representing the SoA each particle resides in
+     * Builds the parent array for tracking particle position
      * @param[in] numElms total number of element SoAs in AoSoA
      * @param[in] numSoa total number of SoAs (can be greater than elem_count if
      * any element of deg is _vector_length)
      * @param[in] offsets offset array for AoSoA, built by buildOffset
-     * @param[out] elms
+     * @return parent array, each element is an int representing the SoA each particle resides in
     */
     int* getParentElms( const int numElms, const int numSoa, const int* offsets ) {
       auto elms = new int[numSoa];
