@@ -1,12 +1,6 @@
 #ifndef CABANAM_HPP
 #define CABANAM_HPP
 
-#include <Cabana_MemberTypes.hpp>
-#include <Cabana_Types.hpp>
-#include <Cabana_AoSoA.hpp>
-#include <impl/Cabana_PerformanceTraits.hpp>
-#include <Cabana_SoA.hpp>
-#include <Cabana_Distributor.hpp>
 #include <Cabana_Core.hpp>
 
 #include <Kokkos_Core.hpp>
