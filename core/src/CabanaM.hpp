@@ -97,7 +97,7 @@ class CabanaM
     /**
      * Fill/Refill last SoA in AoSoA with a series of 1s and 0s
      * where 1 denotes an active particle and 0 denotes an inactive particle.
-     * @param[in] aosoa the AoSoA to be edited
+     * @param[out] aosoa the AoSoA to be edited
      * @param[in] numSoa total number of SoAs (can be greater than elem_count if
      * any element of deg is _vector_length)
      * @param[in] deg pointer to an array of ints, representing the number of active elements in each SoA
